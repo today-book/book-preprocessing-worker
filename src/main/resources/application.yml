@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: book-preprocessing-worker
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:34.64.57.180:9092}
+    consumer:
+      group-id: book-preprocessor
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    properties:
+      spring.json.add.type.headers: false
+
+server:
+  port: 8082
+
+app:
+  kafka:
+    input-topic: book-raw
+    output-topic: book-parsed
