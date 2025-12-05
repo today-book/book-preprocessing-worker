@@ -23,10 +23,24 @@ public class BookPreprocessingService {
     // ✅ 제네릭 타입 수정
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
+    /**
+     * KafkaTemplate을 주입받아 서비스 인스턴스를 초기화한다.
+     *
+     * @param kafkaTemplate parsed 메시지를 Kafka로 전송하는 데 사용되는 KafkaTemplate
+     */
     public BookPreprocessingService(KafkaTemplate<String, Object> kafkaTemplate) {
         this.kafkaTemplate = kafkaTemplate;
     }
 
+    /**
+     * 원시 도서 메시지를 파싱하여 BookParsedMessage로 변환하고 Kafka의 "book.parsed" 토픽으로 전송한다.
+     *
+     * 입력이 유효하지 않거나 필수 필드(ISBN, 제목)가 비어있으면 경고 로그를 남기고 처리를 중단한다.
+     * pubdate가 제공되면 yyyyMMdd 형식으로 파싱을 시도하며 파싱에 실패하면 publishedAt은 null로 유지한다.
+     * Kafka 전송 결과는 비동기적으로 처리되며 전송 실패 시 오류를, 성공 시 토픽/파티션/오프셋 정보를 로그에 남긴다.
+     *
+     * @param raw 처리할 원시 도서 메시지 (ISBN, 제목, pubdate, 등 메타정보를 포함)
+     */
     public void process(BookRawMessage raw) {
         if (raw == null || StringUtils.isBlank(raw.isbn()) || StringUtils.isBlank(raw.title())) {
             log.warn("Skipping book with null/blank title or isbn. raw={}", raw);
@@ -74,6 +88,12 @@ public class BookPreprocessingService {
             });
     }
 
+    /**
+     * 제목 문자열에서 HTML/XML 태그를 제거하고 앞뒤 공백을 제거한다.
+     *
+     * @param title 원본 제목 문자열 — `null`이면 그대로 `null`을 반환한다.
+     * @return `title`이 `null`이면 `null`, 그렇지 않으면 태그가 제거되고 앞뒤 공백이 제거된 문자열
+     */
     private String cleanTitle(String title) {
         if (title == null) return null;
         return title.replaceAll("<.*?>", "").trim();

@@ -24,11 +24,23 @@ public class KafkaConfig {
 
     private final KafkaProperties kafkaProperties;
 
+    /**
+     * Kafka 설정 클래스의 인스턴스를 생성하고 전달된 Kafka 설정을 보관한다.
+     *
+     * @param kafkaProperties 애플리케이션의 Kafka 설정을 제공하는 Spring Boot의 KafkaProperties 객체
+     */
     public KafkaConfig(KafkaProperties kafkaProperties) {
         this.kafkaProperties = kafkaProperties;
     }
 
-    // --- Producer 설정 ---
+    /**
+     * Kafka에 메시지를 전송하기 위한 ProducerFactory를 생성한다.
+     *
+     * 생성된 팩토리는 애플리케이션 설정(spring.kafka.producer 및 bootstrap-servers)으로 구성되며,
+     * 키 직렬화가 지정되지 않은 경우 StringSerializer를 기본으로 사용하도록 설정한다.
+     *
+     * @return String 키와 Object 값을 사용하는 초기화된 ProducerFactory 객체
+     */
 
     @Bean
     public ProducerFactory<String, Object> bookProducerFactory() {
@@ -42,6 +54,11 @@ public class KafkaConfig {
         return new DefaultKafkaProducerFactory<>(props);
     }
 
+    /**
+     * 애플리케이션에서 메시지 전송에 사용할 KafkaTemplate 빈을 생성한다.
+     *
+     * @return String 키와 Object 값을 전송하는 KafkaTemplate 인스턴스
+     */
     @Bean
     public KafkaTemplate<String, Object> kafkaTemplate() {
         // 여기서 등록되는 KafkaTemplate<String, Object> 를
@@ -49,7 +66,14 @@ public class KafkaConfig {
         return new KafkaTemplate<>(bookProducerFactory());
     }
 
-    // --- Consumer 설정 (Listener 에 사용) ---
+    /**
+     * Listener에서 사용될 Kafka 소비자용 ConsumerFactory를 생성한다.
+     *
+     * 생성된 팩토리는 application 설정에서 빌드한 consumer 프로퍼티를 사용하며,
+     * 키와 값의 역직렬화기가 설정되지 않은 경우 기본으로 `StringDeserializer`를 사용하도록 보장한다.
+     *
+     * @return ConsumerFactory<Object, Object> — 기본 설정과 함께 초기화된 DefaultKafkaConsumerFactory 인스턴스
+     */
 
     @Bean
     public ConsumerFactory<Object, Object> bookConsumerFactory() {
@@ -59,6 +83,11 @@ public class KafkaConfig {
         return new DefaultKafkaConsumerFactory<>(props);
     }
 
+    /**
+     * Kafka 리스너에서 사용할 ConcurrentKafkaListenerContainerFactory를 생성하고 반환한다.
+     *
+     * @return 구성된 ConcurrentKafkaListenerContainerFactory<Object, Object> 인스턴스
+     */
     @Bean
     public ConcurrentKafkaListenerContainerFactory<Object, Object> kafkaListenerContainerFactory(
         ConcurrentKafkaListenerContainerFactoryConfigurer configurer
