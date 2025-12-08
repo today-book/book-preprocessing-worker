@@ -3,7 +3,7 @@ spring:
     name: book-preprocessing-worker
 
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:34.64.57.180:9092}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     consumer:
       group-id: book-preprocessor
       auto-offset-reset: earliest
@@ -20,5 +20,5 @@ server:
 
 app:
   kafka:
-    input-topic: book-raw
-    output-topic: book-parsed
+    input-topic: book.raw
+    output-topic: book.parsed
