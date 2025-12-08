@@ -13,6 +13,10 @@ import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.*;
 
 import java.util.Map;
+import org.springframework.kafka.listener.CommonErrorHandler;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
+import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.util.backoff.FixedBackOff;
 
 @Configuration
 @EnableKafka
@@ -48,6 +52,17 @@ public class KafkaConfig {
         props.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         return new DefaultKafkaConsumerFactory<>(props);
+    }
+
+    @Bean
+    public CommonErrorHandler dlqErrorHandler(KafkaTemplate<String, Object> kafkaTemplate) {
+        // 실패 시 "원본토픽명.DLT"로 메시지를 전송함 (예: book.raw -> book.raw.DLT)
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate);
+
+        // 1000ms(1초) 간격으로 2번 재시도 (최초 1회 + 재시도 2회 = 총 3회 시도 후 실패 시 DLQ행)
+        FixedBackOff backOff = new FixedBackOff(1000L, 2);
+
+        return new DefaultErrorHandler(recoverer, backOff);
     }
 
     @Bean

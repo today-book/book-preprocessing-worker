@@ -1,5 +1,6 @@
 package org.todaybook.bookpreprocessingworker.application.kafka;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,23 +29,19 @@ public class BookKafkaListener {
         topics = "${app.kafka.input-topic}",
         groupId = "${spring.kafka.consumer.group-id}"
     )
-    public void onMessage(String payload) {
+    public void onMessage(String payload) throws JsonProcessingException {
+        // try-catch 제거! 예외가 터지면 Spring Kafka ErrorHandler에게 맡김.
+
         log.info(">>> [book.search.response] received payload length = {}", payload.length());
 
-        try {
-            // NaverBookSearchResponse로 역직렬화
-            NaverBookSearchResponse response = objectMapper.readValue(payload, NaverBookSearchResponse.class);
+        // 1. 역직렬화 수행 (여기서 실패하면 JsonProcessingException 발생 -> 재시도 -> DLQ)
+        NaverBookSearchResponse response = objectMapper.readValue(payload, NaverBookSearchResponse.class);
 
-            // 서비스로 전달 (null 체크는 서비스 혹은 여기서 수행)
-            if (response.items() != null && !response.items().isEmpty()) {
-                preprocessingService.process(response);
-            } else {
-                log.warn("Received empty items list from payload.");
-            }
-
-        } catch (Exception e) {
-            log.error("Failed to deserialize NaverBookSearchResponse. payload fragment={}",
-                payload.substring(0, Math.min(payload.length(), 100)), e);
+        // 2. 비즈니스 로직 수행 (여기서 RuntimeException 발생 -> 재시도 -> DLQ)
+        if (response.items() != null && !response.items().isEmpty()) {
+            preprocessingService.process(response);
+        } else {
+            log.warn("Received empty items list.");
         }
     }
 }
