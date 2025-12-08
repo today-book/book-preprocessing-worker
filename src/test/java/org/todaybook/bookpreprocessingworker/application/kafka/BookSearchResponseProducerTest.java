@@ -14,7 +14,7 @@ class BookSearchResponseProducerTest {
     private KafkaTemplate<String, Object> kafkaTemplate;
 
     // application.yml에 설정된 입력 토픽 이름 가져오기
-    @Value("${app.kafka.input-topic:book.search.response}")
+    @Value("${app.kafka.input-topic:book.raw}")
     private String topic;
 
     @Test

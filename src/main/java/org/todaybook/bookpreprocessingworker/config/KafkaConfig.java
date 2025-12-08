@@ -6,6 +6,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.boot.autoconfigure.kafka.ConcurrentKafkaListenerContainerFactoryConfigurer;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafka;
@@ -20,6 +21,7 @@ import org.springframework.util.backoff.FixedBackOff;
 
 @Configuration
 @EnableKafka
+@EnableConfigurationProperties(AppKafkaProperties.class)
 public class KafkaConfig {
 
     private final KafkaProperties kafkaProperties;

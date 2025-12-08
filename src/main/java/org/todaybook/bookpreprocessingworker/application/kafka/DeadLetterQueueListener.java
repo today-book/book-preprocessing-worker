@@ -40,6 +40,7 @@ public class DeadLetterQueueListener {
             - Original Topic: {}
             - Error Reason: {}
             - Payload: {}
-            """, originalTopic, exceptionMessage, payload);
+            - Stack Trace: {}
+            """, originalTopic, exceptionMessage, payload, stackTrace);
     }
 }
