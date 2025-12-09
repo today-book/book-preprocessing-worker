@@ -6,15 +6,27 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.test.context.EmbeddedKafka;
+import org.springframework.test.annotation.DirtiesContext;
 
-@SpringBootTest(properties = "spring.kafka.bootstrap-servers=34.64.57.180:9092")
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+@DirtiesContext // 테스트 종료 후 컨텍스트를 리로드하여 다른 테스트에 영향을 주지 않도록 설정
+@EmbeddedKafka(partitions = 1, topics = {"book.raw"}, ports = {9999}) // 포트를 9092로 고정하거나, 랜덤 포트 사용 시 properties 설정 필요
+@SpringBootTest(properties = {
+    // 1. 임베디드 카프카가 실행된 주소(브로커)를 Spring Boot 설정에 주입
+    "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}",
+    // 2. 테스트 환경에서 사용할 토픽 이름 명시 (application.yml 설정 덮어쓰기)
+    "app.kafka.input-topic=book.raw"
+})
 class BookSearchResponseProducerTest {
 
     @Autowired
     private KafkaTemplate<String, Object> kafkaTemplate;
 
-    // application.yml에 설정된 입력 토픽 이름 가져오기
-    @Value("${app.kafka.input-topic:book.raw}")
+    @Value("${app.kafka.input-topic}")
     private String topic;
 
     @Test
@@ -27,20 +39,16 @@ class BookSearchResponseProducerTest {
 
         System.out.println(">>> Sending Test Payload to Topic: " + topic);
 
-        kafkaTemplate.send(topic, jsonPayload)
-            .whenComplete((result, ex) -> {
-                if (ex == null) {
-                    System.out.println("✅ SUCCESS! Offset: " + result.getRecordMetadata().offset());
-                } else {
-                    System.err.println("❌ FAILURE! " + ex.getMessage());
-                }
-            });
-
-        // 비동기 전송이 완료될 때까지 잠시 대기 (테스트 종료 방지)
         try {
-            Thread.sleep(2000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+            // .get(10, TimeUnit.SECONDS)를 사용하여 동기적으로 전송 완료를 기다립니다.
+            // 테스트 코드에서는 Thread.sleep 대신 이 방식을 권장합니다.
+            var result = kafkaTemplate.send(topic, jsonPayload).get(10, TimeUnit.SECONDS);
+
+            System.out.println("✅ SUCCESS! Offset: " + result.getRecordMetadata().offset());
+
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            System.err.println("❌ FAILURE! " + e.getMessage());
+            throw new RuntimeException("Kafka 전송 실패", e);
         }
     }
 }

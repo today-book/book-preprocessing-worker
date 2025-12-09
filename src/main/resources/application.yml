@@ -13,7 +13,10 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
     properties:
+      security.protocol: SASL_PLAINTEXT
+      sasl.mechanism: SCRAM-SHA-256
       spring.json.add.type.headers: false
+      sasl.jaas.config: org.apache.kafka.common.security.scram.ScramLoginModule required username="admin" password="Qwer!234";
 
 server:
   port: 8082

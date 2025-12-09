@@ -60,7 +60,7 @@ public class BookPreprocessingService {
         String refinedIsbn = extractIsbn13(rawIsbn);
 
         // 2. 날짜 변환 (String -> LocalDate -> LocalDateTime)
-        LocalDateTime publishedAt = parsePublishDateToDateTime(item.pubdate(), refinedIsbn);
+        LocalDate publishedAt = parsePublishDateToDate(item.pubdate(), refinedIsbn);
 
         // 3. 메시지 생성
         // categories는 네이버 API 기본 응답에 없으므로 빈 리스트 처리
@@ -96,13 +96,12 @@ public class BookPreprocessingService {
     // --- Helper Methods ---
 
     /**
-     * yyyyMMdd 문자열을 LocalDateTime(00:00:00)으로 변환
+     * yyyyMMdd 문자열을 LocalDate으로 변환
      */
-    private LocalDateTime parsePublishDateToDateTime(String pubdateStr, String isbn) {
+    private LocalDate parsePublishDateToDate(String pubdateStr, String isbn) {
         if (StringUtils.isBlank(pubdateStr)) return null;
         try {
-            LocalDate date = LocalDate.parse(pubdateStr, NAVER_PUBDATE_FORMAT);
-            return date.atStartOfDay(); // 2023-10-05 -> 2023-10-05T00:00:00
+            return LocalDate.parse(pubdateStr, NAVER_PUBDATE_FORMAT);
         } catch (Exception e) {
             log.warn("Failed to parse pubdate='{}' for isbn={}", pubdateStr, isbn);
             return null;
