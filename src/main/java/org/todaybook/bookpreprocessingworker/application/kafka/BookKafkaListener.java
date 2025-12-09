@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
+import org.todaybook.bookpreprocessingworker.application.dto.NaverBookItem;
 import org.todaybook.bookpreprocessingworker.application.dto.NaverBookSearchResponse;
 import org.todaybook.bookpreprocessingworker.application.service.BookPreprocessingService;
 
@@ -35,13 +36,19 @@ public class BookKafkaListener {
         log.info(">>> [book.search.response] received payload length = {}", payload.length());
 
         // 1. 역직렬화 수행 (여기서 실패하면 JsonProcessingException 발생 -> 재시도 -> DLQ)
-        NaverBookSearchResponse response = objectMapper.readValue(payload, NaverBookSearchResponse.class);
+        // NaverBookSearchResponse response = objectMapper.readValue(payload, NaverBookSearchResponse.class);
+
+        // 1. 역직렬화 다건
+        NaverBookItem item = objectMapper.readValue(payload, NaverBookItem.class);
+
+        // 2. 비즈니스 로직 다건
+        preprocessingService.processSingleItem(item);
 
         // 2. 비즈니스 로직 수행 (여기서 RuntimeException 발생 -> 재시도 -> DLQ)
-        if (response.items() != null && !response.items().isEmpty()) {
-            preprocessingService.process(response);
-        } else {
-            log.warn("Received empty items list.");
-        }
+        //        if (response.items() != null && !response.items().isEmpty()) {
+        //            preprocessingService.process(response);
+        //        } else {
+        //            log.warn("Received empty items list.");
+        //        }
     }
 }

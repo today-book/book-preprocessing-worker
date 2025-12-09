@@ -47,7 +47,7 @@ public class BookPreprocessingService {
         }
     }
 
-    private void processSingleItem(NaverBookItem item) {
+    public void processSingleItem(NaverBookItem item) {
         String rawIsbn = item.isbn();
         String title = item.title();
 
