@@ -1,0 +1,8 @@
+server:
+  port: 9002
+
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    properties:
+      security.protocol: PLAINTEXT

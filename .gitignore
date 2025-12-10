@@ -39,4 +39,5 @@ out/
 ### DS ###
 
 ### ENV ###
-.env
+.env.*
+!.env.example

@@ -1,7 +1,6 @@
 package org.todaybook.bookpreprocessingworker.application.dto;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 
 public record BookConsumeMessage(
@@ -9,8 +8,10 @@ public record BookConsumeMessage(
     String title,
     List<String> categories,
     String description,
+    // TODO: author 특수문자 처리 필요
     String author,
     String publisher,
     LocalDate publishedAt,
+    // TODO: 줄바꿈 처리 필요
     String thumbnail
 ) {}
