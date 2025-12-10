@@ -1,4 +1,4 @@
-name: Deploy to EC2
+name: Deploy to EC2 with Dynamic Security Group
 
 on:
   push:
@@ -29,13 +29,33 @@ jobs:
       - name: Push Docker Image
         run: docker push ghcr.io/${{ secrets.GHCR_USER }}/todaybook:${{ github.sha }}
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2 # 서울 리전 (다르면 수정 필요)
+
+      - name: Add GitHub Actions IP to Security Group
+        run: |
+          echo "현재 Runner의 IP를 확인합니다..."
+          IP=$(curl -s https://checkip.amazonaws.com)
+          echo "Runner IP: $IP"
+          
+          echo "보안 그룹(${{ secrets.AWS_SG_ID }})에 SSH(22) 허용 규칙을 추가합니다..."
+          aws ec2 authorize-security-group-ingress \
+            --group-id ${{ secrets.AWS_SG_ID }} \
+            --protocol tcp \
+            --port 22 \
+            --cidr $IP/32
+
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
-          # [수정 2] script 안에서 쓸 변수들을 여기서 넘겨줘야 함 (Secrets에 등록되어 있다고 가정)
+          port: 22
           envs: GITHUB_SHA,GHCR_USER,GHCR_TOKEN,KAFKA_BOOTSTRAP_SERVERS,KAFKA_CONSUMER_GROUP
           script: |
             # 환경 변수 설정 (위 envs에서 넘어온 값들)
@@ -69,3 +89,14 @@ jobs:
             # 헬스체크 대기
             sleep 10
             docker logs todaybook | head -20
+      - name: Remove GitHub Actions IP from Security Group
+        if: always() # 위 단계가 에러나도 이건 꼭 실행됨
+        run: |
+          echo "보안 그룹 규칙을 정리합니다..."
+          IP=$(curl -s https://checkip.amazonaws.com)
+          
+          aws ec2 revoke-security-group-ingress \
+            --group-id ${{ secrets.AWS_SG_ID }} \
+            --protocol tcp \
+            --port 22 \
+            --cidr $IP/32
