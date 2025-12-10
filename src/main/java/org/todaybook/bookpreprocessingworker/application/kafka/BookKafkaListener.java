@@ -7,7 +7,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.todaybook.bookpreprocessingworker.application.dto.NaverBookItem;
-import org.todaybook.bookpreprocessingworker.application.dto.NaverBookSearchResponse;
 import org.todaybook.bookpreprocessingworker.application.service.BookPreprocessingService;
 
 @Component
@@ -24,31 +23,26 @@ public class BookKafkaListener {
     }
 
     /**
-     * Kafka 토픽에서 네이버 도서 검색 결과 JSON을 수신하여 처리합니다.
+     * Kafka 토픽에서 단건 도서 정보(JSON)를 수신하여 처리합니다.
      */
     @KafkaListener(
         topics = "${app.kafka.input-topic}",
         groupId = "${spring.kafka.consumer.group-id}"
     )
     public void onMessage(String payload) throws JsonProcessingException {
-        // try-catch 제거! 예외가 터지면 Spring Kafka ErrorHandler에게 맡김.
+        // payload 로그는 디버그 레벨이나 필요시에만 남기는 것이 좋습니다.
+        log.info(">>> [book.item] received payload length = {}", payload.length());
 
-        log.info(">>> [book.search.response] received payload length = {}", payload.length());
-
-        // 1. 역직렬화 수행 (여기서 실패하면 JsonProcessingException 발생 -> 재시도 -> DLQ)
-        // NaverBookSearchResponse response = objectMapper.readValue(payload, NaverBookSearchResponse.class);
-
-        // 1. 역직렬화 다건
+        // 1. 단건 역직렬화 (실패 시 예외 발생 -> DLQ 이동)
         NaverBookItem item = objectMapper.readValue(payload, NaverBookItem.class);
 
-        // 2. 비즈니스 로직 다건
-        preprocessingService.processSingleItem(item);
+        // 2. 방어 로직: 역직렬화 결과가 null인 경우 (거의 없지만 안전장치)
+        if (item == null) {
+            log.warn("Deserialized item is null. payload={}", payload);
+            return;
+        }
 
-        // 2. 비즈니스 로직 수행 (여기서 RuntimeException 발생 -> 재시도 -> DLQ)
-        //        if (response.items() != null && !response.items().isEmpty()) {
-        //            preprocessingService.process(response);
-        //        } else {
-        //            log.warn("Received empty items list.");
-        //        }
+        // 3. 비즈니스 로직 수행 (단건 처리 메서드 호출)
+        preprocessingService.processSingleItem(item);
     }
 }
