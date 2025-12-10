@@ -1,0 +1,70 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USER }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      # [수정 1] latest 대신 github.sha를 사용하여 버전 명시 (Pull 할 때와 일치시킴)
+      - name: Build Docker Image
+        run: |
+          docker build -t ghcr.io/${{ secrets.GHCR_USER }}/todaybook:${{ github.sha }} .
+
+      # [수정 1] Push도 sha 태그로 수행
+      - name: Push Docker Image
+        run: docker push ghcr.io/${{ secrets.GHCR_USER }}/todaybook:${{ github.sha }}
+
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          # [수정 2] script 안에서 쓸 변수들을 여기서 넘겨줘야 함 (Secrets에 등록되어 있다고 가정)
+          envs: GITHUB_SHA,GHCR_USER,GHCR_TOKEN,KAFKA_BOOTSTRAP_SERVERS,KAFKA_CONSUMER_GROUP
+          script: |
+            # 환경 변수 설정 (위 envs에서 넘어온 값들)
+            export GHCR_TOKEN=${{ secrets.GHCR_TOKEN }}
+            export GHCR_USER=${{ secrets.GHCR_USER }}
+            export GITHUB_SHA=${{ github.sha }}
+            
+            # [수정 2] GitHub Secrets에서 Kafka 정보를 가져와야 함 (없다면 하드코딩 필요)
+            export KAFKA_BOOTSTRAP_SERVERS="${{ secrets.KAFKA_BOOTSTRAP_SERVERS }}"
+            export KAFKA_CONSUMER_GROUP="${{ secrets.KAFKA_CONSUMER_GROUP }}"
+
+            # 로그인 & Pull
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            docker pull ghcr.io/$GHCR_USER/todaybook:$GITHUB_SHA
+            
+            # 기존 컨테이너 중지 및 삭제
+            docker stop todaybook || true
+            docker rm todaybook || true
+            
+            # 실행 (환경 변수가 정상적으로 들어감)
+            docker run -d \
+                          --name todaybook \
+                          -p 8888:8082 \
+                          -e SPRING_KAFKA_BOOTSTRAP_SERVERS="$KAFKA_BOOTSTRAP_SERVERS" \
+                          -e SPRING_KAFKA_CONSUMER_GROUP_ID="$KAFKA_CONSUMER_GROUP" \
+                          --memory="512m" \
+                          --cpus="0.5" \
+                          --restart unless-stopped \
+                          ghcr.io/$GHCR_USER/todaybook:$GITHUB_SHA
+            
+            # 헬스체크 대기
+            sleep 10
+            docker logs todaybook | head -20
