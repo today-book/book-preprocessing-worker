@@ -11,7 +11,7 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_branch == 'dev'
     runs-on: ubuntu-latest
-    environment: dev
+    environment: deploy
 
     steps:
       # 1) Runner IP 확보 (SG allow/deny에 동일 값 사용)
@@ -25,16 +25,16 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id:     ${{ secrets.DEV_AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.DEV_AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ secrets.DEV_AWS_REGION }}
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ secrets.AWS_REGION }}
 
       # 3) SG에 Runner IP 임시 허용(SSH)
       - name: Allow Runner IP in Security Group (SSH 22)
         run: |
-          echo "Authorize SSH from $RUNNER_IP/32 to SG=${{ secrets.DEV_AWS_SG_ID }}"
+          echo "Authorize SSH from $RUNNER_IP/32 to SG=${{ secrets.AWS_SG_ID }}"
           aws ec2 authorize-security-group-ingress \
-            --group-id "${{ secrets.DEV_AWS_SG_ID }}" \
+            --group-id "${{ secrets.AWS_SG_ID }}" \
             --protocol tcp \
             --port 22 \
             --cidr "$RUNNER_IP/32" || true
@@ -43,9 +43,9 @@ jobs:
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.DEV_EC2_HOST }}
-          username: ${{ secrets.DEV_EC2_USER }}
-          key: ${{ secrets.DEV_EC2_KEY }}
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
           port: 22
           script: |
             set -euo pipefail
@@ -126,7 +126,7 @@ jobs:
               ]
             }
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.DEV_SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
       # 6) SG 규칙 정리 (항상 수행)
       - name: Revoke Runner IP from Security Group
