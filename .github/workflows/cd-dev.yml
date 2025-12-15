@@ -132,9 +132,9 @@ jobs:
       - name: Revoke Runner IP from Security Group
         if: always()
         run: |
-          echo "Revoke SSH from $RUNNER_IP/32 to SG=${{ secrets.DEV_AWS_SG_ID }}"
+          echo "Revoke SSH from $RUNNER_IP/32 to SG=${{ secrets.AWS_SG_ID }}"
           aws ec2 revoke-security-group-ingress \
-            --group-id "${{ secrets.DEV_AWS_SG_ID }}" \
+            --group-id "${{ secrets.AWS_SG_ID }}" \
             --protocol tcp \
             --port 22 \
             --cidr "$RUNNER_IP/32" || true
