@@ -1,5 +1,6 @@
 server:
   port: 9002
+  address: 0.0.0.0
 
 spring:
   application:
@@ -21,14 +22,11 @@ spring:
     properties:
       spring.json.add.type.headers: false
 
-    management:
-      endpoints:
-        web:
-          exposure:
-            include: health
-
-
-app:
-  kafka:
-    input-topic: book.raw
-    output-topic: book.parsed
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  health:
+    kafka:
+      enabled: false
