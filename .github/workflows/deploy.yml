@@ -9,6 +9,14 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
 
+    # 🔥 핵심: 여기서 실제 env 생성
+    env:
+      GHCR_USER: ${{ secrets.GHCR_USER }}
+      GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+      KAFKA_BOOTSTRAP_SERVERS: ${{ secrets.KAFKA_BOOTSTRAP_SERVERS }}
+      KAFKA_USERNAME: ${{ secrets.KAFKA_USERNAME }}
+      KAFKA_PASSWORD: ${{ secrets.KAFKA_PASSWORD }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,14 +35,14 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ secrets.GHCR_USER }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          username: ${{ env.GHCR_USER }}
+          password: ${{ env.GHCR_TOKEN }}
 
       # ---------- Build & Push ----------
       - name: Build & Push Docker Image
         run: |
-          docker build -t ghcr.io/${{ secrets.GHCR_USER }}/book-preprocessing-worker:${IMAGE_TAG} .
-          docker push ghcr.io/${{ secrets.GHCR_USER }}/book-preprocessing-worker:${IMAGE_TAG}
+          docker build -t ghcr.io/${GHCR_USER}/book-preprocessing-worker:${IMAGE_TAG} .
+          docker push ghcr.io/${GHCR_USER}/book-preprocessing-worker:${IMAGE_TAG}
 
       # ---------- AWS Credentials ----------
       - name: Configure AWS credentials
