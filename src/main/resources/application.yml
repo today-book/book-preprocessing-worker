@@ -21,6 +21,13 @@ spring:
     properties:
       spring.json.add.type.headers: false
 
+    management:
+      endpoints:
+        web:
+          exposure:
+            include: health
+
+
 app:
   kafka:
     input-topic: book.raw
