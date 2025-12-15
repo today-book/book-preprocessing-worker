@@ -11,7 +11,7 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_branch == 'dev'
     runs-on: ubuntu-latest
-    environment: ci, dev
+    environment: dev
 
     steps:
       - name: Configure AWS Credentials
@@ -33,20 +33,20 @@ jobs:
             --instance-ids ${{ secrets.DEV_EC2_INSTANCE_ID }} \
             --document-name AWS-RunShellScript \
             --comment "Deploy dev ${IMAGE_TAG}" \
-            --parameters commands="
-              set -e
-              docker pull ${IMAGE}
-              docker stop book-preprocessing-worker || true
-              docker rm book-preprocessing-worker || true
-              docker run -d \
+            --parameters 'commands=[
+              "set -e",
+              "docker pull '"${IMAGE}"'",
+              "docker stop book-preprocessing-worker || true",
+              "docker rm book-preprocessing-worker || true",
+              "docker run -d \
                 --name book-preprocessing-worker \
                 -p 9002:9002 \
                 -e SPRING_PROFILES_ACTIVE=dev \
-                -e KAFKA_BOOTSTRAP_SERVERS='${{ secrets.DEV_KAFKA_BOOTSTRAP_SERVERS }}' \
-                -e KAFKA_USERNAME='${{ secrets.DEV_KAFKA_USERNAME }}' \
-                -e KAFKA_PASSWORD='${{ secrets.DEV_KAFKA_PASSWORD }}' \
-                ${IMAGE}
-            "
+                -e KAFKA_BOOTSTRAP_SERVERS='"${{ secrets.DEV_KAFKA_BOOTSTRAP_SERVERS }}"' \
+                -e KAFKA_USERNAME='"${{ secrets.DEV_KAFKA_USERNAME }}"' \
+                -e KAFKA_PASSWORD='"${{ secrets.DEV_KAFKA_PASSWORD }}"' \
+                '"${IMAGE}"'"
+            ]'
 
       # ❌ 실패 전용 Slack 알림 (성공 알림 없음)
       - name: Notify Slack on Deployment Failure
