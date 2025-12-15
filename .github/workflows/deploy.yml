@@ -1,124 +1,146 @@
-name: Deploy to EC2 with Dynamic Security Group
+name: Deploy Dev (SSM + EC2 Docker)
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "dev" ]
 
 jobs:
-  deploy:
+  deploy-dev:
     runs-on: ubuntu-latest
-    environment: deploy
+    environment: dev
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # Runner IP를 한 번만 구해서 저장(추가/삭제에 동일 값 사용)
-      - name: Capture Runner IP
+      - name: Set Image Tag (dev-<short_sha>)
         run: |
-          IP=$(curl -s https://checkip.amazonaws.com)
-          echo "RUNNER_IP=$IP" >> $GITHUB_ENV
-          echo "Runner IP: $IP"
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          echo "IMAGE_TAG=dev-${SHORT_SHA}" >> $GITHUB_ENV
 
-      # prod는 SHA 태그를 사용(운영에서 latest 덮어쓰기 사고 방지)
-      - name: Set Image Tag (SHA)
-        run: |
-          echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
-
-      - name: Login to GitHub Container Registry
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ secrets.GHCR_USER }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      # SHA 태그 + (선택) latest도 같이 푸시
-      - name: Build & Push Docker Image
+      - name: Build & Push (GHCR)
         run: |
-          docker build -t ghcr.io/${{ secrets.GHCR_USER }}/book-preprocessing-worker:${IMAGE_TAG} .
-          docker push ghcr.io/${{ secrets.GHCR_USER }}/book-preprocessing-worker:${IMAGE_TAG}
+          IMAGE="ghcr.io/${{ secrets.GHCR_USER }}/book-preprocessing-worker:${IMAGE_TAG}"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
 
-          # 원본 문서가 latest를 쓰고 있었으니, 호환 위해 latest도 같이 갱신(선택이지만 보통 유용)
-          docker tag ghcr.io/${{ secrets.GHCR_USER }}/book-preprocessing-worker:${IMAGE_TAG} ghcr.io/${{ secrets.GHCR_USER }}/book-preprocessing-worker:latest
-          docker push ghcr.io/${{ secrets.GHCR_USER }}/book-preprocessing-worker:latest
+          # 선택: dev-latest 유지(편의)
+          docker tag "$IMAGE" "ghcr.io/${{ secrets.GHCR_USER }}/book-preprocessing-worker:dev-latest"
+          docker push "ghcr.io/${{ secrets.GHCR_USER }}/book-preprocessing-worker:dev-latest"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-northeast-2
+          aws-region:            ${{ secrets.AWS_REGION }}
 
-      - name: Add GitHub Actions IP to Security Group
+      - name: Deploy on EC2 via SSM (docker pull/run)
+        id: ssm
+        env:
+          INSTANCE_ID: ${{ secrets.DEV_EC2_INSTANCE_ID }}
+          GHCR_USER:   ${{ secrets.GHCR_USER }}
+          GHCR_TOKEN:  ${{ secrets.GHCR_TOKEN }}
+          IMAGE_TAG:   ${{ env.IMAGE_TAG }}
+          KAFKA_BOOTSTRAP_SERVERS: ${{ secrets.KAFKA_BOOTSTRAP_SERVERS }}
+          KAFKA_USERNAME:          ${{ secrets.KAFKA_USERNAME }}
+          KAFKA_PASSWORD:          ${{ secrets.KAFKA_PASSWORD }}
         run: |
-          echo "보안 그룹(${{ secrets.AWS_SG_ID }})에 SSH(22) 허용 규칙을 추가합니다..."
-          aws ec2 authorize-security-group-ingress \
-            --group-id ${{ secrets.AWS_SG_ID }} \
-            --protocol tcp \
-            --port 22 \
-            --cidr $RUNNER_IP/32
+          set -euo pipefail
+          IMAGE="ghcr.io/${GHCR_USER}/book-preprocessing-worker:${IMAGE_TAG}"
 
-      - name: Deploy to EC2 via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_KEY }}
-          port: 22
-          script: |
-            set -e
+          # SSM에 보낼 스크립트(EC2에서 실행됨)
+          cat > /tmp/ssm-dev-deploy.sh <<'EOS'
+          set -euo pipefail
 
-            GHCR_USER='${{ secrets.GHCR_USER }}'
-            GHCR_TOKEN='${{ secrets.GHCR_TOKEN }}'
-            IMAGE_TAG='${{ github.sha }}'
+          echo "Login GHCR..."
+          echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
 
-            KAFKA_BOOTSTRAP_SERVERS='${{ secrets.KAFKA_BOOTSTRAP_SERVERS }}'
-            KAFKA_USERNAME='${{ secrets.KAFKA_USERNAME }}'
-            KAFKA_PASSWORD='${{ secrets.KAFKA_PASSWORD }}'
+          echo "Pull image: ${IMAGE}"
+          docker pull "${IMAGE}"
 
-            echo "이미지 Pull 시작..."
-            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-            docker pull ghcr.io/$GHCR_USER/book-preprocessing-worker:$IMAGE_TAG
+          echo "Stop/Rm old container..."
+          docker stop book-preprocessing-worker || true
+          docker rm book-preprocessing-worker || true
 
-            echo "기존 컨테이너 정리..."
-            docker stop book-preprocessing-worker || true
-            docker rm book-preprocessing-worker || true
+          echo "Run new container..."
+          docker run -d \
+            --name book-preprocessing-worker \
+            -p 9002:9002 \
+            -e SPRING_PROFILES_ACTIVE=dev \
+            -e KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP_SERVERS}" \
+            -e KAFKA_USERNAME="${KAFKA_USERNAME}" \
+            -e KAFKA_PASSWORD="${KAFKA_PASSWORD}" \
+            --memory="512m" \
+            --cpus="0.5" \
+            --restart unless-stopped \
+            "${IMAGE}"
 
-            echo "새 컨테이너 실행..."
-            docker run -d \
-              --name book-preprocessing-worker \
-              -p 9002:9002 \
-              -e SPRING_PROFILES_ACTIVE=dev \
-              -e KAFKA_BOOTSTRAP_SERVERS="$KAFKA_BOOTSTRAP_SERVERS" \
-              -e KAFKA_USERNAME="$KAFKA_USERNAME" \
-              -e KAFKA_PASSWORD="$KAFKA_PASSWORD" \
-              --memory="512m" \
-              --cpus="0.5" \
-              --restart unless-stopped \
-              ghcr.io/$GHCR_USER/book-preprocessing-worker:$IMAGE_TAG
+          docker image prune -f
 
-            docker image prune -f
+          echo "Healthcheck..."
+          for i in {1..12}; do
+            if curl -sf http://localhost:9002/actuator/health > /dev/null; then
+              echo "✅ Service is healthy"
+              exit 0
+            fi
+            echo "Waiting... ($i/12)"
+            sleep 5
+          done
 
-            echo "Healthcheck 대기..."
-            for i in {1..12}; do
-              if curl -sf http://localhost:9002/actuator/health > /dev/null; then
-                echo "✅ Service is healthy"
-                exit 0
-              fi
-              echo "Waiting... ($i/12)"
-              sleep 5
-            done
+          echo "❌ Health check failed"
+          docker logs book-preprocessing-worker | tail -200
+          exit 1
+          EOS
 
-            echo "❌ Health check failed"
-            docker logs book-preprocessing-worker | tail -200
+          # 환경변수 삽입(템플릿 치환 개념: 로컬에서 값 주입 후 SSM 실행)
+          export IMAGE
+          envsubst < /tmp/ssm-dev-deploy.sh > /tmp/ssm-dev-deploy.rendered.sh
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${INSTANCE_ID}" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Dev deploy book-preprocessing-worker ${IMAGE_TAG}" \
+            --parameters commands="bash -lc '$(cat /tmp/ssm-dev-deploy.rendered.sh | sed "s/'/'\\\\''/g")'" \
+            --query "Command.CommandId" --output text)
+
+          echo "COMMAND_ID=${COMMAND_ID}" >> $GITHUB_OUTPUT
+
+          echo "Waiting for command to finish..."
+          aws ssm wait command-executed --command-id "${COMMAND_ID}" --instance-id "${INSTANCE_ID}" || true
+
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "${COMMAND_ID}" \
+            --instance-id "${INSTANCE_ID}" \
+            --query "Status" --output text)
+
+          echo "SSM Status: ${STATUS}"
+
+          if [[ "${STATUS}" != "Success" ]]; then
+            echo "---- STDOUT ----"
+            aws ssm get-command-invocation --command-id "${COMMAND_ID}" --instance-id "${INSTANCE_ID}" --query "StandardOutputContent" --output text || true
+            echo "---- STDERR ----"
+            aws ssm get-command-invocation --command-id "${COMMAND_ID}" --instance-id "${INSTANCE_ID}" --query "StandardErrorContent" --output text || true
             exit 1
+          fi
 
-      - name: Remove GitHub Actions IP from Security Group
-        if: always()
-        run: |
-          echo "보안 그룹 규칙을 정리합니다..."
-          aws ec2 revoke-security-group-ingress \
-            --group-id ${{ secrets.AWS_SG_ID }} \
-            --protocol tcp \
-            --port 22 \
-            --cidr $RUNNER_IP/32
+      - name: Slack notify on failure (dev)
+        if: failure()
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          payload: |
+            {
+              "text": ":x: *DEV 배포 실패*",
+              "blocks": [
+                { "type": "section", "text": { "type": "mrkdwn", "text": ":x: *DEV 배포 실패*\n*Repo:* `${{ github.repository }}`\n*Branch:* `${{ github.ref_name }}`\n*Commit:* `${{ github.sha }}`\n*Actor:* `${{ github.actor }}`" } },
+                { "type": "section", "text": { "type": "mrkdwn", "text": "*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\n*SSM CommandId:* `${{ steps.ssm.outputs.COMMAND_ID }}`" } }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
