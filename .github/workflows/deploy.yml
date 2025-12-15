@@ -1,4 +1,4 @@
-name: Deploy to EC2 with Dynamic Security Group
+name: Deploy to EC2
 
 on:
   push:
@@ -7,12 +7,22 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: deploy
+    environment: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ---------- Image Tag 결정 ----------
+      - name: Set Image Tag
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
+          else
+            echo "IMAGE_TAG=latest" >> $GITHUB_ENV
+          fi
+
+      # ---------- GHCR Login ----------
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -20,11 +30,13 @@ jobs:
           username: ${{ secrets.GHCR_USER }}
           password: ${{ secrets.GHCR_TOKEN }}
 
+      # ---------- Build & Push ----------
       - name: Build & Push Docker Image
         run: |
-          docker build -t ghcr.io/${{ secrets.GHCR_USER }}/book-preprocessing-worker:latest .
-          docker push ghcr.io/${{ secrets.GHCR_USER }}/book-preprocessing-worker:latest
+          docker build -t ghcr.io/${{ secrets.GHCR_USER }}/book-preprocessing-worker:${IMAGE_TAG} .
+          docker push ghcr.io/${{ secrets.GHCR_USER }}/book-preprocessing-worker:${IMAGE_TAG}
 
+      # ---------- AWS Credentials ----------
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -32,67 +44,69 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-northeast-2
 
-      - name: Add GitHub Actions IP to Security Group
+      # ---------- SG Open ----------
+      - name: Allow SSH from GitHub Actions
         run: |
-          echo "현재 Runner의 IP를 확인합니다..."
           IP=$(curl -s https://checkip.amazonaws.com)
-          
-          echo "보안 그룹(${{ secrets.AWS_SG_ID }})에 SSH(22) 허용 규칙을 추가합니다..."
           aws ec2 authorize-security-group-ingress \
             --group-id ${{ secrets.AWS_SG_ID }} \
             --protocol tcp \
             --port 22 \
             --cidr $IP/32
 
-      - name: Deploy to EC2 via SSH
+      # ---------- Deploy ----------
+      - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
+        envs: GHCR_USER,GHCR_TOKEN,KAFKA_BOOTSTRAP_SERVERS,KAFKA_USERNAME,KAFKA_PASSWORD,IMAGE_TAG
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
           port: 22
-          env:
-            GHCR_USER: ${{ secrets.GHCR_USER }}
-            GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-            KAFKA_BOOTSTRAP_SERVERS: ${{ secrets.KAFKA_BOOTSTRAP_SERVERS }}
-            KAFKA_USERNAME: ${{ secrets.KAFKA_USERNAME }}
-            KAFKA_PASSWORD: ${{ secrets.KAFKA_PASSWORD }}
-          envs: GHCR_USER,GHCR_TOKEN,KAFKA_BOOTSTRAP_SERVERS,KAFKA_USERNAME,KAFKA_PASSWORD
           script: |
-            echo "이미지 Pull 시작..."
+            set -e
+
+            echo "Login GHCR"
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-            docker pull ghcr.io/$GHCR_USER/book-preprocessing-worker:latest
-            
-            echo "기존 컨테이너 정리..."
+
+            echo "Pull Image"
+            docker pull ghcr.io/$GHCR_USER/book-preprocessing-worker:$IMAGE_TAG
+
+            echo "Stop old container"
             docker stop book-preprocessing-worker || true
             docker rm book-preprocessing-worker || true
-            
-            echo "새 컨테이너 실행..."
+
+            echo "Run new container"
             docker run -d \
               --name book-preprocessing-worker \
               -p 9002:9002 \
-              -e SPRING_PROFILES_ACTIVE=dev \
+              -e SPRING_PROFILES_ACTIVE=${{ job.environment }} \
               -e KAFKA_BOOTSTRAP_SERVERS="$KAFKA_BOOTSTRAP_SERVERS" \
               -e KAFKA_USERNAME="$KAFKA_USERNAME" \
               -e KAFKA_PASSWORD="$KAFKA_PASSWORD" \
+              --restart unless-stopped \
               --memory="512m" \
               --cpus="0.5" \
-              --restart unless-stopped \
-              ghcr.io/$GHCR_USER/book-preprocessing-worker:latest
-            
-            # 불필요한 이미지 정리
-            docker image prune -f 
-            
-            # 헬스체크 대기
-            sleep 10
-            docker logs book-preprocessing-worker | head -20
+              ghcr.io/$GHCR_USER/book-preprocessing-worker:$IMAGE_TAG
 
-      - name: Remove GitHub Actions IP from Security Group
+            echo "Health check wait..."
+            for i in {1..10}; do
+              if curl -sf http://localhost:9002/actuator/health; then
+                echo "Service is healthy"
+                exit 0
+              fi
+              sleep 5
+            done
+
+            echo "Health check failed"
+            docker logs book-preprocessing-worker
+            exit 1
+
+      # ---------- SG Close ----------
+      - name: Remove SSH Rule
         if: always()
         run: |
-          echo "보안 그룹 규칙을 정리합니다..."
           IP=$(curl -s https://checkip.amazonaws.com)
-          
           aws ec2 revoke-security-group-ingress \
             --group-id ${{ secrets.AWS_SG_ID }} \
             --protocol tcp \
