@@ -8,6 +8,7 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    environment: ci
 
     outputs:
       image_tag: ${{ steps.meta.outputs.IMAGE_TAG }}
