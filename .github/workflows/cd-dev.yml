@@ -1,0 +1,116 @@
+name: CD - Deploy Dev
+
+on:
+  workflow_run:
+    workflows: ["CI - Build & Publish Image"]
+    types: [completed]
+
+jobs:
+  deploy-dev:
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'dev'
+    runs-on: ubuntu-latest
+    environment: dev
+
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.DEV_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.DEV_AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ secrets.DEV_AWS_REGION }}
+
+      - name: Deploy via SSM
+        id: deploy_ssm
+        run: |
+          set -e
+
+          IMAGE_TAG="${{ github.event.workflow_run.outputs.image_tag }}"
+          IMAGE="ghcr.io/${{ secrets.GHCR_USER }}/book-preprocessing-worker:${IMAGE_TAG}"
+
+          aws ssm send-command \
+            --instance-ids ${{ secrets.DEV_EC2_INSTANCE_ID }} \
+            --document-name AWS-RunShellScript \
+            --comment "Deploy dev ${IMAGE_TAG}" \
+            --parameters commands="
+              set -e
+              docker pull ${IMAGE}
+              docker stop book-preprocessing-worker || true
+              docker rm book-preprocessing-worker || true
+              docker run -d \
+                --name book-preprocessing-worker \
+                -p 9002:9002 \
+                -e SPRING_PROFILES_ACTIVE=dev \
+                -e KAFKA_BOOTSTRAP_SERVERS='${{ secrets.DEV_KAFKA_BOOTSTRAP_SERVERS }}' \
+                -e KAFKA_USERNAME='${{ secrets.DEV_KAFKA_USERNAME }}' \
+                -e KAFKA_PASSWORD='${{ secrets.DEV_KAFKA_PASSWORD }}' \
+                ${IMAGE}
+            "
+
+      # ❌ 실패 전용 Slack 알림 (성공 알림 없음)
+      - name: Notify Slack on Deployment Failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          payload: |
+            {
+              "text": "🚨 DEV 배포 실패",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "🚨 DEV 배포 실패",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Environment*\nDEV"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Service*\nbook-preprocessing-worker"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch*\n`${{ github.event.workflow_run.head_branch }}`"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Commit*\n`${{ github.event.workflow_run.head_sha }}`"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Image Tag*\n`${{ github.event.workflow_run.outputs.image_tag }}`"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Triggered By*\n`${{ github.actor }}`"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "🔍 *바로 확인하기*\n${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "⏱ 발생 시각: <!date^${{ github.run_started_at }}^{date_short} {time}|time>"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
