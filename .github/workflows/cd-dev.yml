@@ -48,28 +48,67 @@ jobs:
                 ${IMAGE}
             "
 
-      # ✅ 배포 실패 시 Slack 알림
-      - name: Notify Slack on Failure
+      # ❌ 실패 전용 Slack 알림 (성공 알림 없음)
+      - name: Notify Slack on Deployment Failure
         if: failure()
         uses: slackapi/slack-github-action@v1.27.0
         with:
           payload: |
             {
-              "text": "🚨 *Dev 배포 실패*",
+              "text": "🚨 DEV 배포 실패",
               "blocks": [
                 {
-                  "type": "section",
+                  "type": "header",
                   "text": {
-                    "type": "mrkdwn",
-                    "text": "🚨 *Dev 환경 배포 실패*\n\n*브랜치:* `${{ github.event.workflow_run.head_branch }}`\n*커밋:* `${{ github.event.workflow_run.head_sha }}`\n*이미지 태그:* `${{ github.event.workflow_run.outputs.image_tag }}`"
+                    "type": "plain_text",
+                    "text": "🚨 DEV 배포 실패",
+                    "emoji": true
                   }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Environment*\nDEV"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Service*\nbook-preprocessing-worker"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch*\n`${{ github.event.workflow_run.head_branch }}`"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Commit*\n`${{ github.event.workflow_run.head_sha }}`"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Image Tag*\n`${{ github.event.workflow_run.outputs.image_tag }}`"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Triggered By*\n`${{ github.actor }}`"
+                    }
+                  ]
                 },
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*Workflow Run:*\n${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    "text": "🔍 *바로 확인하기*\n${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                   }
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "⏱ 발생 시각: <!date^${{ github.run_started_at }}^{date_short} {time}|time>"
+                    }
+                  ]
                 }
               ]
             }
