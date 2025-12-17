@@ -6,7 +6,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class AppKafkaProperties {
 
     private String inputTopic;
+    private String csvInputTopic;
     private String outputTopic;
+    private String prefix;
+    private String env;
 
     /**
      * Kafka에서 사용될 입력 토픽의 이름을 반환한다.
@@ -27,6 +30,24 @@ public class AppKafkaProperties {
     }
 
     /**
+     * CSV 입력 토픽의 이름을 반환한다.
+     *
+     * @return CSV 입력 토픽 이름
+     */
+    public String getCsvInputTopic() {
+        return csvInputTopic;
+    }
+
+    /**
+     * CSV 입력 토픽의 이름을 설정한다.
+     *
+     * @param csvInputTopic 설정할 CSV 입력 토픽 이름
+     */
+    public void setCsvInputTopic(String csvInputTopic) {
+        this.csvInputTopic = csvInputTopic;
+    }
+
+    /**
      * Kafka 출력 토픽의 이름을 제공한다.
      *
      * @return 출력 토픽의 이름
@@ -42,5 +63,21 @@ public class AppKafkaProperties {
      */
     public void setOutputTopic(String outputTopic) {
         this.outputTopic = outputTopic;
+    }
+
+    public String getPrefix() {
+        return prefix;
+    }
+
+    public void setPrefix(String prefix) {
+        this.prefix = prefix;
+    }
+
+    public String getEnv() {
+        return env;
+    }
+
+    public void setEnv(String env) {
+        this.env = env;
     }
 }

@@ -19,7 +19,7 @@ import org.springframework.test.context.ActiveProfiles;
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @EmbeddedKafka(
     partitions = 1,
-    topics = {"book.raw", "book.parsed", "book.raw.DLT"},
+    topics = {"book.raw", "csv-book.raw", "book.parsed", "book.raw.DLT"},
     brokerProperties = {
         "listeners=PLAINTEXT://localhost:0",
         "port=0"

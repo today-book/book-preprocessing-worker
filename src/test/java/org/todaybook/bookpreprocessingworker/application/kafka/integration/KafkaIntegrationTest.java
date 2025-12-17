@@ -35,7 +35,7 @@ import org.todaybook.bookpreprocessingworker.application.dto.BookConsumeMessage;
 @SpringBootTest
 @EmbeddedKafka(
     partitions = 1,
-    topics = {"book.raw", "book.parsed", "book.raw.DLT"},
+    topics = {"book.raw", "csv-book.raw", "book.parsed", "book.raw.DLT"},
     brokerProperties = {
         "listeners=PLAINTEXT://localhost:0",
         "port=0"
@@ -51,6 +51,7 @@ class KafkaIntegrationTest {
     private static final String DLT_TOPIC = "book.raw.DLT";
 
     @Autowired
+    @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
     private EmbeddedKafkaBroker embeddedKafkaBroker;
 
     @Autowired
