@@ -12,7 +12,7 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest
-@EmbeddedKafka(partitions = 1, topics = {"book.raw", "book.parsed"})
+@EmbeddedKafka(partitions = 1, topics = {"book.raw", "book.parsed", "csv-book.raw"})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @ActiveProfiles("test")
 @DisplayName("AppKafkaProperties Integration Tests")
@@ -40,7 +40,7 @@ class AppKafkaPropertiesTest {
         @Test
         @DisplayName("Given_ApplicationYml_When_Loaded_Then_CsvInputTopicIsBound")
         void givenApplicationYml_whenLoaded_thenCsvInputTopicIsBound() {
-            assertThat(appKafkaProperties.getCsvInputTopic()).isEqualTo("book.raw");
+            assertThat(appKafkaProperties.getCsvInputTopic()).isEqualTo("csv-book.raw");
         }
 
         @Test

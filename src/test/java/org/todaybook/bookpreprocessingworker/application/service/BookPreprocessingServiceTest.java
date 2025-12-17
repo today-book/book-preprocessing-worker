@@ -32,6 +32,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.todaybook.bookpreprocessingworker.application.dto.BookConsumeMessage;
 import org.todaybook.bookpreprocessingworker.application.dto.NaverBookItem;
+import org.todaybook.bookpreprocessingworker.config.AppKafkaProperties;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("BookPreprocessingService Unit Tests")
@@ -44,12 +45,16 @@ class BookPreprocessingServiceTest {
 
     private ObjectMapper objectMapper;
     private BookPreprocessingService preprocessingService;
+    private AppKafkaProperties appKafkaProperties;
 
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
-        preprocessingService = new BookPreprocessingService(kafkaTemplate, objectMapper);
+        appKafkaProperties = new AppKafkaProperties();
+        appKafkaProperties.setOutputTopic(OUTPUT_TOPIC);
+        appKafkaProperties.setCsvInputTopic("csv-book.raw");
+        preprocessingService = new BookPreprocessingService(kafkaTemplate, objectMapper, appKafkaProperties);
     }
 
     @Nested

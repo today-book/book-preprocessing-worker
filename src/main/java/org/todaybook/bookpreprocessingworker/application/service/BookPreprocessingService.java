@@ -11,6 +11,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.todaybook.bookpreprocessingworker.application.dto.BookConsumeMessage;
 import org.todaybook.bookpreprocessingworker.application.dto.NaverBookItem;
+import org.todaybook.bookpreprocessingworker.config.AppKafkaProperties;
 
 @Service
 public class BookPreprocessingService {
@@ -18,7 +19,6 @@ public class BookPreprocessingService {
     private static final Logger log = LoggerFactory.getLogger(BookPreprocessingService.class);
     private static final DateTimeFormatter NAVER_PUBDATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
     private static final DateTimeFormatter CSV_PUBDATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-    private static final String OUTPUT_TOPIC = "book.parsed";
     private static final int CSV_ISBN_13_INDEX = 1;
     private static final int CSV_TITLE_INDEX = 3;
     private static final int CSV_AUTHOR_INDEX = 4;
@@ -30,10 +30,16 @@ public class BookPreprocessingService {
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final ObjectMapper objectMapper;
+    private final String outputTopic;
 
-    public BookPreprocessingService(KafkaTemplate<String, Object> kafkaTemplate, ObjectMapper objectMapper) {
+    public BookPreprocessingService(
+        KafkaTemplate<String, Object> kafkaTemplate,
+        ObjectMapper objectMapper,
+        AppKafkaProperties appKafkaProperties
+    ) {
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
+        this.outputTopic = resolveOutputTopic(appKafkaProperties);
     }
 
     /**
@@ -200,7 +206,7 @@ public class BookPreprocessingService {
     private void sendToKafka(String key, BookConsumeMessage message) {
         try {
             String jsonMessage = objectMapper.writeValueAsString(message);
-            kafkaTemplate.send(OUTPUT_TOPIC, key, jsonMessage)
+            kafkaTemplate.send(outputTopic, key, jsonMessage)
                 .whenComplete((result, ex) -> {
                     if (ex != null) {
                         log.error("Failed to send parsed book. isbn={}, ex={}", key, ex.getMessage());
@@ -235,5 +241,13 @@ public class BookPreprocessingService {
     private String cleanTitle(String title) {
         if (title == null) return null;
         return title.replaceAll("<.*?>", "").trim();
+    }
+
+    private String resolveOutputTopic(AppKafkaProperties properties) {
+        String configured = properties == null ? null : properties.getOutputTopic();
+        if (StringUtils.isNotBlank(configured)) {
+            return configured;
+        }
+        return "book.parsed";
     }
 }

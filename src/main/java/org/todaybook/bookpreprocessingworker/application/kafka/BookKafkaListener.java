@@ -29,7 +29,7 @@ public class BookKafkaListener {
     @KafkaListener(
         topics = {
             "${app.kafka.input-topic}",
-            "${app.kafka.csv-input-topic:${app.kafka.input-topic}}"
+            "${app.kafka.csv-input-topic:csv-book.raw}"
         },
         groupId = "${spring.kafka.consumer.group-id}"
     )

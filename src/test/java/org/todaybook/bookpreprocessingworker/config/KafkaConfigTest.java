@@ -22,7 +22,7 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest
-@EmbeddedKafka(partitions = 1, topics = {"book.raw", "book.parsed", "book.raw.DLT"})
+@EmbeddedKafka(partitions = 1, topics = {"book.raw", "csv-book.raw", "book.parsed", "book.raw.DLT"})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @ActiveProfiles("test")
 @DisplayName("KafkaConfig Integration Tests")

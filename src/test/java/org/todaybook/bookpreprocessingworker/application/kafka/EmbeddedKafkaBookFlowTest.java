@@ -27,7 +27,7 @@ import org.todaybook.bookpreprocessingworker.application.dto.BookConsumeMessage;
 @SpringBootTest
 @EmbeddedKafka(
     partitions = 1,
-    topics = {"book.raw", "book.parsed"},
+    topics = {"book.raw", "csv-book.raw", "book.parsed"},
     brokerProperties = {"listeners=PLAINTEXT://localhost:0", "port=0"}
 )
 @TestPropertySource(properties = {
