@@ -30,4 +30,5 @@ management:
 app:
   kafka:
     input-topic: book.raw
+    csv-input-topic: csv-book.raw
     output-topic: book.parsed

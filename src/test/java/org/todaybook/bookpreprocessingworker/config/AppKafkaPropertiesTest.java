@@ -38,6 +38,12 @@ class AppKafkaPropertiesTest {
         }
 
         @Test
+        @DisplayName("Given_ApplicationYml_When_Loaded_Then_CsvInputTopicIsBound")
+        void givenApplicationYml_whenLoaded_thenCsvInputTopicIsBound() {
+            assertThat(appKafkaProperties.getCsvInputTopic()).isEqualTo("book.raw");
+        }
+
+        @Test
         @DisplayName("Given_ApplicationYml_When_Loaded_Then_OutputTopicIsBound")
         void givenApplicationYml_whenLoaded_thenOutputTopicIsBound() {
             assertThat(appKafkaProperties.getOutputTopic()).isEqualTo("book.parsed");

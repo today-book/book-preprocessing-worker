@@ -13,6 +13,8 @@ import static org.mockito.Mockito.mock;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.LocalDate;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -28,6 +30,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
+import org.todaybook.bookpreprocessingworker.application.dto.BookConsumeMessage;
 import org.todaybook.bookpreprocessingworker.application.dto.NaverBookItem;
 
 @ExtendWith(MockitoExtension.class)
@@ -47,6 +50,81 @@ class BookPreprocessingServiceTest {
         objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
         preprocessingService = new BookPreprocessingService(kafkaTemplate, objectMapper);
+    }
+
+    @Nested
+    @DisplayName("processCsvRow - CSV Parsing Tests")
+    class ProcessCsvRowTests {
+
+        @Test
+        @DisplayName("Given_ValidCsvRow_When_ProcessCsvRow_Then_BuildsAndSendsMessage")
+        void givenValidCsvRow_whenProcessCsvRow_thenBuildsAndSendsMessage() throws Exception {
+            String csvRow = "\"115982\",\"9780761921585\",\"cloth\",\"Designing for learning:six elements in constructivist classrooms\",\"George W. Gagnon, Jr., Michelle Collay\",\"Corwin Press, Calif.\",\"\",\"\",\"121081\",\"http://image.aladin.co.kr/product/519/70/cover/0761921583_1.jpg\",\"\",\"\",\"designingforlearningsixelementsinconstructivistclassrooms\",\"\",\"2000-12-29\",\"Y\",\"Y\",\"0761921583 (cloth)\"";
+
+            given(kafkaTemplate.send(anyString(), anyString(), any()))
+                .willReturn(CompletableFuture.completedFuture(mock(SendResult.class)));
+
+            preprocessingService.processCsvRow(csvRow);
+
+            ArgumentCaptor<String> jsonCaptor = ArgumentCaptor.forClass(String.class);
+            verify(kafkaTemplate).send(eq(OUTPUT_TOPIC), eq("9780761921585"), jsonCaptor.capture());
+
+            BookConsumeMessage message = objectMapper.readValue(jsonCaptor.getValue(), BookConsumeMessage.class);
+            assertThat(message.isbn()).isEqualTo("9780761921585");
+            assertThat(message.title()).isEqualTo("Designing for learning:six elements in constructivist classrooms");
+            assertThat(message.author()).contains("George W. Gagnon");
+            assertThat(message.publisher()).isEqualTo("Corwin Press, Calif.");
+            assertThat(message.publishedAt()).isEqualTo(LocalDate.of(2000, 12, 29));
+            assertThat(message.thumbnail()).contains("0761921583_1.jpg");
+            assertThat(message.categories()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Given_MissingPrimaryIsbn_When_ProcessCsvRow_Then_UsesFallbackIsbn")
+        void givenMissingPrimaryIsbn_whenProcessCsvRow_thenUsesFallbackIsbn() {
+            String csvRow = buildCsvRow(
+                "115982",
+                "", // isbn13 missing
+                "cloth",
+                "Fallback ISBN title",
+                "Author Name",
+                "Publisher",
+                "", "", "121081",
+                "http://image.aladin.co.kr/product/519/70/cover/0761921583_1.jpg",
+                "", "",
+                "slug-value",
+                "",
+                "2000-12-29",
+                "Y",
+                "Y",
+                "0761921583 (cloth)"
+            );
+
+            given(kafkaTemplate.send(anyString(), anyString(), any()))
+                .willReturn(CompletableFuture.completedFuture(mock(SendResult.class)));
+
+            preprocessingService.processCsvRow(csvRow);
+
+            verify(kafkaTemplate).send(eq(OUTPUT_TOPIC), eq("0761921583"), anyString());
+        }
+
+        @Test
+        @DisplayName("Given_InvalidCsvRow_When_ProcessCsvRow_Then_SkipsSending")
+        void givenInvalidCsvRow_whenProcessCsvRow_thenSkipsSending() {
+            String csvRow = buildCsvRow(
+                "id",
+                "", // missing isbn and fallback
+                "binding",
+                "", // missing title
+                "author",
+                "publisher",
+                "", "", "", "", "", "", "", "", "", "", "", ""
+            );
+
+            preprocessingService.processCsvRow(csvRow);
+
+            verify(kafkaTemplate, never()).send(anyString(), anyString(), any());
+        }
     }
 
     @Nested
@@ -622,6 +700,12 @@ class BookPreprocessingServiceTest {
     }
 
     // --- Helper Methods ---
+
+    private String buildCsvRow(String... values) {
+        return Arrays.stream(values)
+            .map(value -> value == null ? "\"\"" : "\"" + value + "\"")
+            .collect(Collectors.joining(","));
+    }
 
     private NaverBookItem createValidItem(String title, String isbn, String pubdate, String author, String publisher) {
         return new NaverBookItem(

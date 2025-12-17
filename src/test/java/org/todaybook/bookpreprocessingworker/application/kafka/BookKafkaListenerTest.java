@@ -152,6 +152,20 @@ class BookKafkaListenerTest {
             assertThat(capturedItem.title()).isEqualTo("객체지향의 사실과 오해");
             assertThat(capturedItem.description()).isEqualTo("역할, 책임, 협력 관점에서 본 객체지향");
         }
+
+        @Test
+        @DisplayName("Given_CsvPayload_When_OnMessage_Then_DelegatesToCsvProcessor")
+        void givenCsvPayload_whenOnMessage_thenDelegatesToCsvProcessor() throws Exception {
+            // given
+            String csvPayload = "\"115982\",\"9780761921585\",\"cloth\",\"Designing for learning:six elements in constructivist classrooms\",\"George W. Gagnon, Jr., Michelle Collay\",\"Corwin Press, Calif.\",\"\",\"\",\"121081\",\"http://image.aladin.co.kr/product/519/70/cover/0761921583_1.jpg\",\"\",\"\",\"designingforlearningsixelementsinconstructivistclassrooms\",\"\",\"2000-12-29\",\"Y\",\"Y\",\"0761921583 (cloth)\"";
+
+            // when
+            bookKafkaListener.onMessage(csvPayload);
+
+            // then
+            then(preprocessingService).should(times(1)).processCsvRow(csvPayload);
+            then(preprocessingService).should(never()).processSingleItem(any());
+        }
     }
 
     @Nested
