@@ -50,6 +50,7 @@ class BookPreprocessingServiceTest {
             assertThat(book.publisher()).isEqualTo("Corwin Press, Calif.");
             assertThat(book.publishedAt()).isEqualTo(LocalDate.of(2000, 12, 29));
             assertThat(book.thumbnail()).contains("0761921583_1.jpg");
+            assertThat(book.description()).isNull(); // slug should not be treated as description
         }
 
         @Test

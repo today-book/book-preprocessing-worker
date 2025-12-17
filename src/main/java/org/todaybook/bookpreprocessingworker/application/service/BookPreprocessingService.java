@@ -23,7 +23,7 @@ public class BookPreprocessingService implements BookMessageUseCase {
     private static final int CSV_AUTHOR_INDEX = 4;
     private static final int CSV_PUBLISHER_INDEX = 5;
     private static final int CSV_IMAGE_INDEX = 9;
-    private static final int CSV_DESCRIPTION_INDEX = 11;
+    private static final int CSV_DESCRIPTION_INDEX = 10;
     private static final int CSV_PUBDATE_INDEX = 14;
     private static final int CSV_FALLBACK_ISBN_INDEX = 17;
 
@@ -54,7 +54,7 @@ public class BookPreprocessingService implements BookMessageUseCase {
         String publisherName = getColumn(columns, CSV_PUBLISHER_INDEX);
         String description = firstNonBlank(
             getColumn(columns, CSV_DESCRIPTION_INDEX),
-            getColumn(columns, CSV_DESCRIPTION_INDEX + 1) // slight variation slot if description shifts
+            getColumn(columns, CSV_DESCRIPTION_INDEX + 1) // fallback for minor shifts, but skip slug column
         );
         String thumbnail = getColumn(columns, CSV_IMAGE_INDEX);
         LocalDate publishedAt = parseCsvPublishDate(getColumn(columns, CSV_PUBDATE_INDEX), isbn);
