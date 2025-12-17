@@ -1,4 +1,4 @@
-package org.todaybook.bookpreprocessingworker.application.kafka;
+package org.todaybook.bookpreprocessingworker.infrastructure.kafka.listener;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -7,18 +7,18 @@ import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.todaybook.bookpreprocessingworker.application.dto.NaverBookItem;
-import org.todaybook.bookpreprocessingworker.application.service.BookPreprocessingService;
+import org.todaybook.bookpreprocessingworker.application.port.in.BookMessageUseCase;
 
 @Component
 public class JsonBookKafkaListener implements BookMessageListener {
 
     private static final Logger log = LoggerFactory.getLogger(JsonBookKafkaListener.class);
 
-    private final BookPreprocessingService preprocessingService;
+    private final BookMessageUseCase bookMessageUseCase;
     private final ObjectMapper objectMapper;
 
-    public JsonBookKafkaListener(BookPreprocessingService preprocessingService, ObjectMapper objectMapper) {
-        this.preprocessingService = preprocessingService;
+    public JsonBookKafkaListener(BookMessageUseCase bookMessageUseCase, ObjectMapper objectMapper) {
+        this.bookMessageUseCase = bookMessageUseCase;
         this.objectMapper = objectMapper;
     }
 
@@ -37,6 +37,6 @@ public class JsonBookKafkaListener implements BookMessageListener {
             return;
         }
 
-        preprocessingService.processSingleItem(item);
+        bookMessageUseCase.processSingleItem(item);
     }
 }

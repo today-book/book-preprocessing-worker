@@ -1,20 +1,19 @@
 package org.todaybook.bookpreprocessingworker.application.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.common.util.StringUtils;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
-import org.todaybook.bookpreprocessingworker.application.dto.BookConsumeMessage;
 import org.todaybook.bookpreprocessingworker.application.dto.NaverBookItem;
-import org.todaybook.bookpreprocessingworker.config.AppKafkaProperties;
+import org.todaybook.bookpreprocessingworker.application.port.in.BookMessageUseCase;
+import org.todaybook.bookpreprocessingworker.application.port.out.BookMessagePublisher;
+import org.todaybook.bookpreprocessingworker.domain.model.Book;
 
 @Service
-public class BookPreprocessingService {
+public class BookPreprocessingService implements BookMessageUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(BookPreprocessingService.class);
     private static final DateTimeFormatter NAVER_PUBDATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
@@ -28,25 +27,15 @@ public class BookPreprocessingService {
     private static final int CSV_PUBDATE_INDEX = 14;
     private static final int CSV_FALLBACK_ISBN_INDEX = 17;
 
-    private final KafkaTemplate<String, Object> kafkaTemplate;
-    private final ObjectMapper objectMapper;
-    private final String outputTopic;
+    private final BookMessagePublisher publisher;
 
     public BookPreprocessingService(
-        KafkaTemplate<String, Object> kafkaTemplate,
-        ObjectMapper objectMapper,
-        AppKafkaProperties appKafkaProperties
+        BookMessagePublisher publisher
     ) {
-        this.kafkaTemplate = kafkaTemplate;
-        this.objectMapper = objectMapper;
-        this.outputTopic = resolveOutputTopic(appKafkaProperties);
+        this.publisher = publisher;
     }
 
-    /**
-     * Preprocesses a single CSV row representing raw book data and publishes it as a BookConsumeMessage.
-     *
-     * @param csvRow a single line CSV string (quoted) containing book information
-     */
+    @Override
     public void processCsvRow(String csvRow) {
         if (StringUtils.isBlank(csvRow)) {
             log.warn("Skipping empty CSV row.");
@@ -62,7 +51,7 @@ public class BookPreprocessingService {
         String isbn = extractCsvIsbn(columns);
         String title = getColumn(columns, CSV_TITLE_INDEX);
         String author = getColumn(columns, CSV_AUTHOR_INDEX);
-        String publisher = getColumn(columns, CSV_PUBLISHER_INDEX);
+        String publisherName = getColumn(columns, CSV_PUBLISHER_INDEX);
         String description = firstNonBlank(
             getColumn(columns, CSV_DESCRIPTION_INDEX),
             getColumn(columns, CSV_DESCRIPTION_INDEX + 1) // slight variation slot if description shifts
@@ -75,24 +64,25 @@ public class BookPreprocessingService {
             return;
         }
 
-        BookConsumeMessage message = new BookConsumeMessage(
+        Book book = new Book(
             isbn,
             cleanTitle(title),
             Collections.emptyList(),
             description,
             author,
-            publisher,
+            publisherName,
             publishedAt,
             thumbnail
         );
 
-        sendToKafka(isbn, message);
+        publisher.publish(book);
     }
 
     /**
      * [변경] 반복문 메서드(process) 삭제됨.
      * 단건 처리 메서드만 남겨둡니다.
      */
+    @Override
     public void processSingleItem(NaverBookItem item) {
         String rawIsbn = item.isbn();
         String title = item.title();
@@ -112,7 +102,7 @@ public class BookPreprocessingService {
         LocalDate publishedAt = parsePublishDateToDate(item.pubdate(), refinedIsbn);
 
         // 3. 메시지 생성
-        BookConsumeMessage message = new BookConsumeMessage(
+        Book book = new Book(
             refinedIsbn,
             cleanTitle(title),
             Collections.emptyList(),
@@ -124,7 +114,7 @@ public class BookPreprocessingService {
         );
 
         // 4. Kafka 전송
-        sendToKafka(refinedIsbn, message);
+        publisher.publish(book);
     }
 
     // --- Helper Methods (기존과 동일) ---
@@ -203,22 +193,6 @@ public class BookPreprocessingService {
             || StringUtils.isBlank(description);
     }
 
-    private void sendToKafka(String key, BookConsumeMessage message) {
-        try {
-            String jsonMessage = objectMapper.writeValueAsString(message);
-            kafkaTemplate.send(outputTopic, key, jsonMessage)
-                .whenComplete((result, ex) -> {
-                    if (ex != null) {
-                        log.error("Failed to send parsed book. isbn={}, ex={}", key, ex.getMessage());
-                    } else {
-                        log.debug("Sent parsed book. isbn={}, offset={}", key, result.getRecordMetadata().offset());
-                    }
-                });
-        } catch (Exception e) {
-            log.error("Failed to serialize message. isbn={}", key, e);
-        }
-    }
-
     private LocalDate parsePublishDateToDate(String pubdateStr, String isbn) {
         if (StringUtils.isBlank(pubdateStr)) return null;
         try {
@@ -241,13 +215,5 @@ public class BookPreprocessingService {
     private String cleanTitle(String title) {
         if (title == null) return null;
         return title.replaceAll("<.*?>", "").trim();
-    }
-
-    private String resolveOutputTopic(AppKafkaProperties properties) {
-        String configured = properties == null ? null : properties.getOutputTopic();
-        if (StringUtils.isNotBlank(configured)) {
-            return configured;
-        }
-        return "book.parsed";
     }
 }

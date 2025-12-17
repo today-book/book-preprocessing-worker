@@ -1,4 +1,4 @@
-package org.todaybook.bookpreprocessingworker.application.kafka;
+package org.todaybook.bookpreprocessingworker.infrastructure.kafka.listener;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -18,7 +18,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.todaybook.bookpreprocessingworker.application.dto.NaverBookItem;
-import org.todaybook.bookpreprocessingworker.application.service.BookPreprocessingService;
+import org.todaybook.bookpreprocessingworker.application.port.in.BookMessageUseCase;
+import org.todaybook.bookpreprocessingworker.infrastructure.kafka.listener.JsonBookKafkaListener;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class JsonBookKafkaListenerTest {
 
     @Mock
-    private BookPreprocessingService preprocessingService;
+    private BookMessageUseCase bookMessageUseCase;
 
     private ObjectMapper objectMapper;
     private JsonBookKafkaListener bookKafkaListener;
@@ -35,7 +36,7 @@ class JsonBookKafkaListenerTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        bookKafkaListener = new JsonBookKafkaListener(preprocessingService, objectMapper);
+        bookKafkaListener = new JsonBookKafkaListener(bookMessageUseCase, objectMapper);
     }
 
     @Nested
@@ -66,7 +67,7 @@ class JsonBookKafkaListenerTest {
 
             // then
             ArgumentCaptor<NaverBookItem> captor = ArgumentCaptor.forClass(NaverBookItem.class);
-            verify(preprocessingService, times(1)).processSingleItem(captor.capture());
+            verify(bookMessageUseCase, times(1)).processSingleItem(captor.capture());
 
             NaverBookItem capturedItem = captor.getValue();
             assertThat(capturedItem.title()).isEqualTo("이펙티브 자바");
@@ -93,7 +94,7 @@ class JsonBookKafkaListenerTest {
 
             // then
             ArgumentCaptor<NaverBookItem> captor = ArgumentCaptor.forClass(NaverBookItem.class);
-            verify(preprocessingService).processSingleItem(captor.capture());
+            verify(bookMessageUseCase).processSingleItem(captor.capture());
 
             NaverBookItem capturedItem = captor.getValue();
             assertThat(capturedItem.title()).isEqualTo("테스트 책");
@@ -121,7 +122,7 @@ class JsonBookKafkaListenerTest {
 
             // then - raw title is passed to service (service handles cleaning)
             ArgumentCaptor<NaverBookItem> captor = ArgumentCaptor.forClass(NaverBookItem.class);
-            verify(preprocessingService).processSingleItem(captor.capture());
+            verify(bookMessageUseCase).processSingleItem(captor.capture());
 
             NaverBookItem capturedItem = captor.getValue();
             assertThat(capturedItem.title()).isEqualTo("<b>헤드 퍼스트</b> 디자인 패턴");
@@ -146,7 +147,7 @@ class JsonBookKafkaListenerTest {
 
             // then
             ArgumentCaptor<NaverBookItem> captor = ArgumentCaptor.forClass(NaverBookItem.class);
-            verify(preprocessingService).processSingleItem(captor.capture());
+            verify(bookMessageUseCase).processSingleItem(captor.capture());
 
             NaverBookItem capturedItem = captor.getValue();
             assertThat(capturedItem.title()).isEqualTo("객체지향의 사실과 오해");
@@ -170,7 +171,7 @@ class JsonBookKafkaListenerTest {
                 .isInstanceOf(JsonProcessingException.class);
 
             // Service should not be called
-            verify(preprocessingService, never()).processSingleItem(any());
+            verify(bookMessageUseCase, never()).processSingleItem(any());
         }
 
         @Test
@@ -183,7 +184,7 @@ class JsonBookKafkaListenerTest {
             assertThatThrownBy(() -> bookKafkaListener.onMessage(emptyJson))
                 .isInstanceOf(JsonProcessingException.class);
 
-            verify(preprocessingService, never()).processSingleItem(any());
+            verify(bookMessageUseCase, never()).processSingleItem(any());
         }
 
         @Test
@@ -203,7 +204,7 @@ class JsonBookKafkaListenerTest {
             assertThatThrownBy(() -> bookKafkaListener.onMessage(arrayJson))
                 .isInstanceOf(JsonProcessingException.class);
 
-            verify(preprocessingService, never()).processSingleItem(any());
+            verify(bookMessageUseCase, never()).processSingleItem(any());
         }
 
         @Test
@@ -216,7 +217,7 @@ class JsonBookKafkaListenerTest {
             assertThatThrownBy(() -> bookKafkaListener.onMessage(nullPayload))
                 .isInstanceOf(Exception.class);
 
-            verify(preprocessingService, never()).processSingleItem(any());
+            verify(bookMessageUseCase, never()).processSingleItem(any());
         }
     }
 
@@ -244,7 +245,7 @@ class JsonBookKafkaListenerTest {
 
             // then - should parse successfully, ignoring unknown fields
             ArgumentCaptor<NaverBookItem> captor = ArgumentCaptor.forClass(NaverBookItem.class);
-            verify(preprocessingService).processSingleItem(captor.capture());
+            verify(bookMessageUseCase).processSingleItem(captor.capture());
 
             NaverBookItem capturedItem = captor.getValue();
             assertThat(capturedItem.title()).isEqualTo("테스트 책");
@@ -271,7 +272,7 @@ class JsonBookKafkaListenerTest {
 
             // then
             ArgumentCaptor<NaverBookItem> captor = ArgumentCaptor.forClass(NaverBookItem.class);
-            verify(preprocessingService).processSingleItem(captor.capture());
+            verify(bookMessageUseCase).processSingleItem(captor.capture());
 
             NaverBookItem capturedItem = captor.getValue();
             assertThat(capturedItem.link()).isNull();
@@ -297,7 +298,7 @@ class JsonBookKafkaListenerTest {
 
             // then - raw ISBN is passed to service
             ArgumentCaptor<NaverBookItem> captor = ArgumentCaptor.forClass(NaverBookItem.class);
-            verify(preprocessingService).processSingleItem(captor.capture());
+            verify(bookMessageUseCase).processSingleItem(captor.capture());
 
             NaverBookItem capturedItem = captor.getValue();
             assertThat(capturedItem.isbn()).isEqualTo("8966262287 9788966262281");
@@ -314,7 +315,7 @@ class JsonBookKafkaListenerTest {
 
             // then - all fields are null, but still parsed
             ArgumentCaptor<NaverBookItem> captor = ArgumentCaptor.forClass(NaverBookItem.class);
-            verify(preprocessingService).processSingleItem(captor.capture());
+            verify(bookMessageUseCase).processSingleItem(captor.capture());
 
             NaverBookItem capturedItem = captor.getValue();
             assertThat(capturedItem.title()).isNull();
@@ -340,7 +341,7 @@ class JsonBookKafkaListenerTest {
 
             // then
             ArgumentCaptor<NaverBookItem> captor = ArgumentCaptor.forClass(NaverBookItem.class);
-            verify(preprocessingService).processSingleItem(captor.capture());
+            verify(bookMessageUseCase).processSingleItem(captor.capture());
 
             NaverBookItem capturedItem = captor.getValue();
             assertThat(capturedItem.title()).contains("C++");
@@ -366,7 +367,7 @@ class JsonBookKafkaListenerTest {
 
             // then
             ArgumentCaptor<NaverBookItem> captor = ArgumentCaptor.forClass(NaverBookItem.class);
-            verify(preprocessingService).processSingleItem(captor.capture());
+            verify(bookMessageUseCase).processSingleItem(captor.capture());
 
             NaverBookItem capturedItem = captor.getValue();
             assertThat(capturedItem.description()).hasSize(10000);
@@ -400,7 +401,7 @@ class JsonBookKafkaListenerTest {
 
             // then
             ArgumentCaptor<NaverBookItem> captor = ArgumentCaptor.forClass(NaverBookItem.class);
-            verify(preprocessingService).processSingleItem(captor.capture());
+            verify(bookMessageUseCase).processSingleItem(captor.capture());
 
             NaverBookItem capturedItem = captor.getValue();
             assertThat(capturedItem.title()).contains("르몽드 디플로마티크");

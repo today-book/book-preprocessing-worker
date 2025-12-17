@@ -1,4 +1,4 @@
-package org.todaybook.bookpreprocessingworker.application.kafka;
+package org.todaybook.bookpreprocessingworker.infrastructure.kafka.listener;
 
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.times;
@@ -9,20 +9,20 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.todaybook.bookpreprocessingworker.application.service.BookPreprocessingService;
+import org.todaybook.bookpreprocessingworker.application.port.in.BookMessageUseCase;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("CsvBookKafkaListener Unit Tests")
 class CsvBookKafkaListenerTest {
 
     @Mock
-    private BookPreprocessingService preprocessingService;
+    private BookMessageUseCase bookMessageUseCase;
 
     private CsvBookKafkaListener listener;
 
     @BeforeEach
     void setUp() {
-        listener = new CsvBookKafkaListener(preprocessingService);
+        listener = new CsvBookKafkaListener(bookMessageUseCase);
     }
 
     @Test
@@ -35,6 +35,6 @@ class CsvBookKafkaListenerTest {
         listener.onMessage(csvPayload);
 
         // then
-        then(preprocessingService).should(times(1)).processCsvRow(csvPayload);
+        then(bookMessageUseCase).should(times(1)).processCsvRow(csvPayload);
     }
 }

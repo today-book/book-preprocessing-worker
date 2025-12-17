@@ -51,6 +51,7 @@ class KafkaIntegrationTest {
     private static final String DLT_TOPIC = "book.raw.DLT";
 
     @Autowired
+    @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
     private EmbeddedKafkaBroker embeddedKafkaBroker;
 
     @Autowired

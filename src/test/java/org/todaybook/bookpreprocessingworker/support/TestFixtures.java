@@ -5,7 +5,6 @@ import java.util.Collections;
 import java.util.List;
 import org.todaybook.bookpreprocessingworker.application.dto.BookConsumeMessage;
 import org.todaybook.bookpreprocessingworker.application.dto.NaverBookItem;
-import org.todaybook.bookpreprocessingworker.application.dto.NaverBookSearchResponse;
 
 /**
  * Test fixtures and sample data generators for unit and integration tests.
@@ -191,50 +190,23 @@ public final class TestFixtures {
     }
 
     // ===========================================
-    // NaverBookSearchResponse Fixtures
+    // NaverBookItem Collections Fixtures
     // ===========================================
 
-    /**
-     * Creates a NaverBookSearchResponse with a single item.
-     */
-    public static NaverBookSearchResponse createSingleItemResponse() {
-        return new NaverBookSearchResponse(
-            "Fri, 05 Dec 2025 09:50:46 +0900",
-            1,
-            1,
-            1,
-            List.of(createValidNaverBookItem())
+    public static List<NaverBookItem> createSingleItemList() {
+        return List.of(createValidNaverBookItem());
+    }
+
+    public static List<NaverBookItem> createMultipleItemList() {
+        return List.of(
+            createValidNaverBookItem(),
+            createNaverBookItemWithHtmlTitle(),
+            createNaverBookItemWithMixedIsbn()
         );
     }
 
-    /**
-     * Creates a NaverBookSearchResponse with multiple items.
-     */
-    public static NaverBookSearchResponse createMultipleItemsResponse() {
-        return new NaverBookSearchResponse(
-            "Fri, 05 Dec 2025 09:50:46 +0900",
-            3,
-            1,
-            3,
-            List.of(
-                createValidNaverBookItem(),
-                createNaverBookItemWithHtmlTitle(),
-                createNaverBookItemWithMixedIsbn()
-            )
-        );
-    }
-
-    /**
-     * Creates an empty NaverBookSearchResponse.
-     */
-    public static NaverBookSearchResponse createEmptyResponse() {
-        return new NaverBookSearchResponse(
-            "Fri, 05 Dec 2025 09:50:46 +0900",
-            0,
-            1,
-            0,
-            Collections.emptyList()
-        );
+    public static List<NaverBookItem> createEmptyItemList() {
+        return Collections.emptyList();
     }
 
     // ===========================================
