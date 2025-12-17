@@ -8,6 +8,8 @@ public class AppKafkaProperties {
     private String inputTopic;
     private String csvInputTopic;
     private String outputTopic;
+    private String prefix;
+    private String env;
 
     /**
      * Kafka에서 사용될 입력 토픽의 이름을 반환한다.
@@ -61,5 +63,21 @@ public class AppKafkaProperties {
      */
     public void setOutputTopic(String outputTopic) {
         this.outputTopic = outputTopic;
+    }
+
+    public String getPrefix() {
+        return prefix;
+    }
+
+    public void setPrefix(String prefix) {
+        this.prefix = prefix;
+    }
+
+    public String getEnv() {
+        return env;
+    }
+
+    public void setEnv(String env) {
+        this.env = env;
     }
 }

@@ -19,7 +19,7 @@ public class CsvBookKafkaListener implements BookMessageListener {
 
     @Override
     @KafkaListener(
-        topics = "${app.kafka.csv-input-topic:csv-book.raw}",
+        topics = "#{@topicNames.csvInputTopic()}",
         groupId = "${spring.kafka.consumer.group-id}"
     )
     public void onMessage(String payload) {

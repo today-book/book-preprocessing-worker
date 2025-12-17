@@ -24,7 +24,7 @@ public class JsonBookKafkaListener implements BookMessageListener {
 
     @Override
     @KafkaListener(
-        topics = "${app.kafka.input-topic}",
+        topics = "#{@topicNames.inputTopic()}",
         groupId = "${spring.kafka.consumer.group-id}"
     )
     public void onMessage(String payload) throws JsonProcessingException {

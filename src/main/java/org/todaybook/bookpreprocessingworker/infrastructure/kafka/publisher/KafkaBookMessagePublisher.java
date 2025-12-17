@@ -7,27 +7,33 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import org.todaybook.bookpreprocessingworker.application.dto.BookConsumeMessage;
 import org.todaybook.bookpreprocessingworker.application.port.out.BookMessagePublisher;
+import org.todaybook.bookpreprocessingworker.common.kafka.MessagePublisher;
 import org.todaybook.bookpreprocessingworker.config.AppKafkaProperties;
+import org.todaybook.bookpreprocessingworker.config.TopicNames;
 import org.todaybook.bookpreprocessingworker.domain.model.Book;
 
+/**
+ * Kafka-based implementation of the outbound port for parsed books.
+ * Relies on the shared JSON publisher from the common-kafka module.
+ */
 @Component
 public class KafkaBookMessagePublisher implements BookMessagePublisher {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaBookMessagePublisher.class);
     private static final String DEFAULT_OUTPUT_TOPIC = "book.parsed";
 
-    private final KafkaTemplate<String, Object> kafkaTemplate;
-    private final ObjectMapper objectMapper;
+    private final MessagePublisher<Object> delegatePublisher;
     private final String outputTopic;
 
     public KafkaBookMessagePublisher(
         KafkaTemplate<String, Object> kafkaTemplate,
         ObjectMapper objectMapper,
-        AppKafkaProperties appKafkaProperties
+        AppKafkaProperties appKafkaProperties,
+        TopicNames topicNames
     ) {
-        this.kafkaTemplate = kafkaTemplate;
-        this.objectMapper = objectMapper;
-        this.outputTopic = resolveOutputTopic(appKafkaProperties);
+        var jsonPublisher = new org.todaybook.bookpreprocessingworker.common.kafka.KafkaJsonPublisher<>(kafkaTemplate, objectMapper);
+        this.delegatePublisher = new org.todaybook.bookpreprocessingworker.common.kafka.InstrumentedMessagePublisher<>(jsonPublisher);
+        this.outputTopic = topicNames.outputTopic();
     }
 
     @Override
@@ -49,19 +55,7 @@ public class KafkaBookMessagePublisher implements BookMessagePublisher {
             book.thumbnail()
         );
 
-        try {
-            String jsonMessage = objectMapper.writeValueAsString(message);
-            kafkaTemplate.send(outputTopic, key, jsonMessage)
-                .whenComplete((result, ex) -> {
-                    if (ex != null) {
-                        log.error("Failed to send parsed book. isbn={}, ex={}", key, ex.getMessage());
-                    } else {
-                        log.debug("Sent parsed book. isbn={}, offset={}", key, result.getRecordMetadata().offset());
-                    }
-                });
-        } catch (Exception e) {
-            log.error("Failed to serialize message. isbn={}", key, e);
-        }
+        delegatePublisher.publish(outputTopic, key, message);
     }
 
     private String resolveOutputTopic(AppKafkaProperties properties) {
