@@ -54,14 +54,36 @@ class BookPreprocessingServiceTest {
         }
 
         @Test
+        void processesRawRowWithCompactDate() {
+            String rawRow = "\"1\",\"9781234567890\",\"binding\",\"Title\",\"Jane Doe\",\"Publisher\",\"\",\"\",\"code\",\"http://image\",\"A sufficiently long description for validation.\",\"\",\"slug\",\"\",\"20201028\",\"Y\",\"Y\",\"\"";
+
+            service.processRawRow(rawRow);
+
+            ArgumentCaptor<Book> captor = ArgumentCaptor.forClass(Book.class);
+            verify(publisher).publish(captor.capture());
+            assertThat(captor.getValue().publishedAt()).isEqualTo(LocalDate.of(2020, 10, 28));
+        }
+
+        @Test
         void usesFallbackIsbnWhenPrimaryMissing() {
-            String rawRow = "\"id\",\"\",\"binding\",\"Title\",\"Author\",\"Publisher\",\"\",\"\",\"code\",\"http://image\",\"A sufficiently long description for validation.\",\"\",\"slug\",\"\",\"2000-12-29\",\"Y\",\"Y\",\"0761921583 (cloth)\"";
+            String rawRow = "\"id\",\"\",\"binding\",\"Title\",\"Jane Doe\",\"Publisher\",\"\",\"\",\"code\",\"http://image\",\"A sufficiently long description for validation.\",\"\",\"slug\",\"\",\"2000-12-29\",\"Y\",\"Y\",\"0761921583 (cloth)\"";
 
             service.processRawRow(rawRow);
 
             ArgumentCaptor<Book> captor = ArgumentCaptor.forClass(Book.class);
             verify(publisher).publish(captor.capture());
             assertThat(captor.getValue().isbn()).isEqualTo("0761921583");
+        }
+
+        @Test
+        void acceptsIsbn10WithXCheckDigit() {
+            String rawRow = "\"id\",\"\",\"binding\",\"Title\",\"Jane Doe\",\"Publisher\",\"\",\"\",\"code\",\"http://image\",\"A sufficiently long description for validation.\",\"\",\"slug\",\"\",\"2000-12-29\",\"Y\",\"Y\",\"123456789X\"";
+
+            service.processRawRow(rawRow);
+
+            ArgumentCaptor<Book> captor = ArgumentCaptor.forClass(Book.class);
+            verify(publisher).publish(captor.capture());
+            assertThat(captor.getValue().isbn()).isEqualTo("123456789X");
         }
 
         @Test
@@ -83,7 +105,7 @@ class BookPreprocessingServiceTest {
                 "<b>Title</b>",
                 "http://link",
                 "http://img",
-                "Author",
+                "Jane Doe",
                 "10000",
                 "9000",
                 "Publisher",
@@ -108,7 +130,7 @@ class BookPreprocessingServiceTest {
             NaverBookItem item = new NaverBookItem(
                 "<b><i>Nested</i> Title</b>",
                 null, null,
-                "Author",
+                "Jane Doe",
                 null, null,
                 "Publisher",
                 "20240102",
@@ -127,7 +149,7 @@ class BookPreprocessingServiceTest {
         void extractsIsbn13WhenMixed() {
             NaverBookItem item = new NaverBookItem(
                 "Title", null, null,
-                "Author", null, null, "Publisher",
+                "Jane Doe", null, null, "Publisher",
                 "20240102",
                 "1234567890 9789999999999",
                 "A long enough description to pass validation rules."
@@ -138,6 +160,23 @@ class BookPreprocessingServiceTest {
             ArgumentCaptor<Book> captor = ArgumentCaptor.forClass(Book.class);
             verify(publisher).publish(captor.capture());
             assertThat(captor.getValue().isbn()).isEqualTo("9789999999999");
+        }
+
+        @Test
+        void acceptsIsbn10WithXCheckDigit() {
+            NaverBookItem item = new NaverBookItem(
+                "Title", null, null,
+                "Jane Doe", null, null, "Publisher",
+                "20240102",
+                "123456789X",
+                "A long enough description to pass validation rules."
+            );
+
+            service.processSingleItem(item);
+
+            ArgumentCaptor<Book> captor = ArgumentCaptor.forClass(Book.class);
+            verify(publisher).publish(captor.capture());
+            assertThat(captor.getValue().isbn()).isEqualTo("123456789X");
         }
 
         @Test
@@ -159,7 +198,7 @@ class BookPreprocessingServiceTest {
         void setsNullPublishedAtOnBadDate() {
             NaverBookItem item = new NaverBookItem(
                 "Title", null, null,
-                "Author", null, null, "Publisher",
+                "Jane Doe", null, null, "Publisher",
                 "bad-date",
                 "9781234567890",
                 "A long enough description to pass validation rules."

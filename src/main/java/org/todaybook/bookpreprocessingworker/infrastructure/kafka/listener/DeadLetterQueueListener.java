@@ -16,7 +16,10 @@ public class DeadLetterQueueListener {
     private static final Logger log = LoggerFactory.getLogger(DeadLetterQueueListener.class);
 
     @KafkaListener(
-        topics = "#{@topicNames.inputTopic()}.DLT",
+        topics = {
+            "#{@topicNames.inputTopic() + '.DLT'}",
+            "#{@topicNames.csvInputTopic() + '.DLT'}"
+        },
         groupId = "dlq-monitor-group",
         containerFactory = "csvKafkaListenerContainerFactory"
     )

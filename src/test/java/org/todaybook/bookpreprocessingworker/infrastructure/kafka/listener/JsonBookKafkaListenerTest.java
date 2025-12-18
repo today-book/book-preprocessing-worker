@@ -12,6 +12,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.todaybook.bookpreprocessingworker.application.dto.NaverBookItem;
 import org.todaybook.bookpreprocessingworker.application.port.in.BookMessageUseCase;
+import org.todaybook.bookpreprocessingworker.config.AppKafkaProperties;
+import org.todaybook.bookpreprocessingworker.config.TopicNames;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("JsonBookKafkaListener Unit Tests")
@@ -24,7 +26,7 @@ class JsonBookKafkaListenerTest {
 
     @BeforeEach
     void setUp() {
-        listener = new JsonBookKafkaListener(bookMessageUseCase);
+        listener = new JsonBookKafkaListener(bookMessageUseCase, topicNames());
     }
 
     @Test
@@ -54,5 +56,11 @@ class JsonBookKafkaListenerTest {
         listener.onMessage(null);
 
         then(bookMessageUseCase).should(never()).processSingleItem(null);
+    }
+
+    private TopicNames topicNames() {
+        AppKafkaProperties props = new AppKafkaProperties();
+        props.setInputTopic("book.raw.naver");
+        return new TopicNames(props);
     }
 }

@@ -29,6 +29,8 @@ public class BookPreprocessingService implements BookMessageUseCase {
 
     private static final DateTimeFormatter RAW_PUBDATE_FORMAT =
         DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final DateTimeFormatter RAW_PUBDATE_COMPACT_FORMAT =
+        DateTimeFormatter.ofPattern("yyyyMMdd");
 
     // ===================== Raw Row Column Index =====================
 
@@ -208,34 +210,52 @@ public class BookPreprocessingService implements BookMessageUseCase {
             return null;
         }
 
-        String digits = raw.replaceAll("\\D", "");
-        if (digits.length() == 13 || digits.length() == 10) {
-            return digits;
+        String cleaned = raw.replaceAll("[^0-9Xx]", "");
+        if (cleaned.length() == 13 && cleaned.chars().allMatch(Character::isDigit)) {
+            return cleaned;
+        }
+
+        if (cleaned.length() == 10) {
+            String firstNine = cleaned.substring(0, 9);
+            char lastChar = cleaned.charAt(9);
+            if (firstNine.chars().allMatch(Character::isDigit)
+                && (Character.isDigit(lastChar) || lastChar == 'X' || lastChar == 'x')) {
+                return firstNine + Character.toUpperCase(lastChar);
+            }
         }
 
         return null;
     }
 
     private LocalDate parseRawPublishDate(String value, String isbn) {
-        try {
-            return StringUtils.isBlank(value)
-                ? null
-                : LocalDate.parse(value, RAW_PUBDATE_FORMAT);
-        } catch (Exception e) {
-            log.warn("Failed to parse RAW pubdate='{}' for isbn={}", value, isbn);
-            return null;
-        }
+        return parseDateWithFormats(value, isbn, "RAW", RAW_PUBDATE_FORMAT, RAW_PUBDATE_COMPACT_FORMAT);
     }
 
     private LocalDate parsePublishDateToDate(String value, String isbn) {
-        try {
-            return StringUtils.isBlank(value)
-                ? null
-                : LocalDate.parse(value, NAVER_PUBDATE_FORMAT);
-        } catch (Exception e) {
-            log.warn("Failed to parse NAVER pubdate='{}' for isbn={}", value, isbn);
+        return parseDateWithFormats(value, isbn, "NAVER", NAVER_PUBDATE_FORMAT);
+    }
+
+    private LocalDate parseDateWithFormats(
+        String value,
+        String isbn,
+        String source,
+        DateTimeFormatter... formatters
+    ) {
+        if (StringUtils.isBlank(value)) {
             return null;
         }
+
+        String trimmed = value.trim();
+        for (DateTimeFormatter formatter : formatters) {
+            try {
+                return LocalDate.parse(trimmed, formatter);
+            } catch (Exception ignored) {
+                // Try the next formatter.
+            }
+        }
+
+        log.warn("Failed to parse {} pubdate='{}' for isbn={}", source, value, isbn);
+        return null;
     }
 
     private String getColumn(List<String> columns, int index) {
@@ -250,7 +270,7 @@ public class BookPreprocessingService implements BookMessageUseCase {
         }
 
         String isbn10 = null;
-        String[] tokens = raw.split("\\s+");
+        String[] tokens = raw.split("[\\s,;/]+");
         for (String token : tokens) {
             String normalized = normalizeIsbn(token);
             if (normalized == null) {

@@ -10,6 +10,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.todaybook.bookpreprocessingworker.application.port.in.BookMessageUseCase;
+import org.todaybook.bookpreprocessingworker.config.AppKafkaProperties;
+import org.todaybook.bookpreprocessingworker.config.TopicNames;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("CsvBookKafkaListener Unit Tests")
@@ -22,7 +24,7 @@ class CsvBookKafkaListenerTest {
 
     @BeforeEach
     void setUp() {
-        listener = new CsvBookKafkaListener(bookMessageUseCase);
+        listener = new CsvBookKafkaListener(bookMessageUseCase, topicNames());
     }
 
     @Test
@@ -36,5 +38,11 @@ class CsvBookKafkaListenerTest {
 
         // then
         then(bookMessageUseCase).should(times(1)).processRawRow(rawPayload);
+    }
+
+    private TopicNames topicNames() {
+        AppKafkaProperties props = new AppKafkaProperties();
+        props.setCsvInputTopic("book.raw.csv");
+        return new TopicNames(props);
     }
 }
