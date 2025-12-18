@@ -23,9 +23,11 @@ server:
 
 app:
   kafka:
-    input-topic: book.raw
-    csv-input-topic: csv-book.raw
+    input-topic: book.raw.naver
+    csv-input-topic: book.raw.csv
     output-topic: book.parsed
+    json-group-id: test-preprocessor-naver
+    csv-group-id: test-preprocessor-csv
 
 logging:
   level:

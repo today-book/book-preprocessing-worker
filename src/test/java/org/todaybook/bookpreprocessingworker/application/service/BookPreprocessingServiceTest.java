@@ -33,12 +33,12 @@ class BookPreprocessingServiceTest {
     }
 
     @Nested
-    class CsvProcessing {
+    class RawRowProcessing {
         @Test
-        void processesValidCsvRow() {
-            String csvRow = "\"115982\",\"9780761921585\",\"cloth\",\"Designing for learning:six elements in constructivist classrooms\",\"George W. Gagnon, Jr., Michelle Collay\",\"Corwin Press, Calif.\",\"\",\"\",\"121081\",\"http://image.aladin.co.kr/product/519/70/cover/0761921583_1.jpg\",\"\",\"\",\"designingforlearningsixelementsinconstructivistclassrooms\",\"\",\"2000-12-29\",\"Y\",\"Y\",\"0761921583 (cloth)\"";
+        void processesValidRawRow() {
+            String rawRow = "\"115982\",\"9780761921585\",\"cloth\",\"Designing for learning:six elements in constructivist classrooms\",\"George W. Gagnon, Jr., Michelle Collay\",\"Corwin Press, Calif.\",\"\",\"\",\"121081\",\"http://image.aladin.co.kr/product/519/70/cover/0761921583_1.jpg\",\"A great book about education and learning practices.\",\"\",\"designingforlearningsixelementsinconstructivistclassrooms\",\"\",\"2000-12-29\",\"Y\",\"Y\",\"0761921583 (cloth)\"";
 
-            service.processCsvRow(csvRow);
+            service.processRawRow(rawRow);
 
             ArgumentCaptor<Book> captor = ArgumentCaptor.forClass(Book.class);
             verify(publisher, times(1)).publish(captor.capture());
@@ -50,14 +50,25 @@ class BookPreprocessingServiceTest {
             assertThat(book.publisher()).isEqualTo("Corwin Press, Calif.");
             assertThat(book.publishedAt()).isEqualTo(LocalDate.of(2000, 12, 29));
             assertThat(book.thumbnail()).contains("0761921583_1.jpg");
-            assertThat(book.description()).isNull(); // slug should not be treated as description
+            assertThat(book.description()).isEqualTo("A great book about education and learning practices.");
+        }
+
+        @Test
+        void processesRawRowWithCompactDate() {
+            String rawRow = "\"1\",\"9781234567890\",\"binding\",\"Title\",\"Jane Doe\",\"Publisher\",\"\",\"\",\"code\",\"http://image\",\"A sufficiently long description for validation.\",\"\",\"slug\",\"\",\"20201028\",\"Y\",\"Y\",\"\"";
+
+            service.processRawRow(rawRow);
+
+            ArgumentCaptor<Book> captor = ArgumentCaptor.forClass(Book.class);
+            verify(publisher).publish(captor.capture());
+            assertThat(captor.getValue().publishedAt()).isEqualTo(LocalDate.of(2020, 10, 28));
         }
 
         @Test
         void usesFallbackIsbnWhenPrimaryMissing() {
-            String csvRow = "\"id\",\"\",\"binding\",\"Title\",\"Author\",\"Publisher\",\"\",\"\",\"code\",\"http://image\",\"\",\"\",\"slug\",\"\",\"2000-12-29\",\"Y\",\"Y\",\"0761921583 (cloth)\"";
+            String rawRow = "\"id\",\"\",\"binding\",\"Title\",\"Jane Doe\",\"Publisher\",\"\",\"\",\"code\",\"http://image\",\"A sufficiently long description for validation.\",\"\",\"slug\",\"\",\"2000-12-29\",\"Y\",\"Y\",\"0761921583 (cloth)\"";
 
-            service.processCsvRow(csvRow);
+            service.processRawRow(rawRow);
 
             ArgumentCaptor<Book> captor = ArgumentCaptor.forClass(Book.class);
             verify(publisher).publish(captor.capture());
@@ -65,10 +76,21 @@ class BookPreprocessingServiceTest {
         }
 
         @Test
-        void skipsWhenRequiredFieldsMissing() {
-            String csvRow = "\"id\",\"\",\"binding\",\"\",\"Author\",\"Publisher\",\"\",\"\",\"code\",\"http://image\",\"\",\"\",\"slug\",\"\",\"\",\"Y\",\"Y\",\"\"";
+        void acceptsIsbn10WithXCheckDigit() {
+            String rawRow = "\"id\",\"\",\"binding\",\"Title\",\"Jane Doe\",\"Publisher\",\"\",\"\",\"code\",\"http://image\",\"A sufficiently long description for validation.\",\"\",\"slug\",\"\",\"2000-12-29\",\"Y\",\"Y\",\"123456789X\"";
 
-            service.processCsvRow(csvRow);
+            service.processRawRow(rawRow);
+
+            ArgumentCaptor<Book> captor = ArgumentCaptor.forClass(Book.class);
+            verify(publisher).publish(captor.capture());
+            assertThat(captor.getValue().isbn()).isEqualTo("123456789X");
+        }
+
+        @Test
+        void skipsWhenRequiredFieldsMissing() {
+            String rawRow = "\"id\",\"\",\"binding\",\"\",\"Author\",\"Publisher\",\"\",\"\",\"code\",\"http://image\",\"\",\"\",\"slug\",\"\",\"\",\"Y\",\"Y\",\"\"";
+
+            service.processRawRow(rawRow);
 
             verify(publisher, never()).publish(org.mockito.Mockito.any());
         }
@@ -83,13 +105,13 @@ class BookPreprocessingServiceTest {
                 "<b>Title</b>",
                 "http://link",
                 "http://img",
-                "Author",
+                "Jane Doe",
                 "10000",
                 "9000",
                 "Publisher",
                 "20240102",
                 "9781234567890",
-                "Desc"
+                "A long enough description to pass validation rules."
             );
 
             service.processSingleItem(item);
@@ -108,12 +130,12 @@ class BookPreprocessingServiceTest {
             NaverBookItem item = new NaverBookItem(
                 "<b><i>Nested</i> Title</b>",
                 null, null,
-                "Author",
+                "Jane Doe",
                 null, null,
                 "Publisher",
                 "20240102",
                 "9781234567890",
-                "Desc"
+                "A long enough description to pass validation rules."
             );
 
             service.processSingleItem(item);
@@ -127,10 +149,10 @@ class BookPreprocessingServiceTest {
         void extractsIsbn13WhenMixed() {
             NaverBookItem item = new NaverBookItem(
                 "Title", null, null,
-                "Author", null, null, "Publisher",
+                "Jane Doe", null, null, "Publisher",
                 "20240102",
                 "1234567890 9789999999999",
-                "Desc"
+                "A long enough description to pass validation rules."
             );
 
             service.processSingleItem(item);
@@ -138,6 +160,23 @@ class BookPreprocessingServiceTest {
             ArgumentCaptor<Book> captor = ArgumentCaptor.forClass(Book.class);
             verify(publisher).publish(captor.capture());
             assertThat(captor.getValue().isbn()).isEqualTo("9789999999999");
+        }
+
+        @Test
+        void acceptsIsbn10WithXCheckDigit() {
+            NaverBookItem item = new NaverBookItem(
+                "Title", null, null,
+                "Jane Doe", null, null, "Publisher",
+                "20240102",
+                "123456789X",
+                "A long enough description to pass validation rules."
+            );
+
+            service.processSingleItem(item);
+
+            ArgumentCaptor<Book> captor = ArgumentCaptor.forClass(Book.class);
+            verify(publisher).publish(captor.capture());
+            assertThat(captor.getValue().isbn()).isEqualTo("123456789X");
         }
 
         @Test
@@ -159,10 +198,10 @@ class BookPreprocessingServiceTest {
         void setsNullPublishedAtOnBadDate() {
             NaverBookItem item = new NaverBookItem(
                 "Title", null, null,
-                "Author", null, null, "Publisher",
+                "Jane Doe", null, null, "Publisher",
                 "bad-date",
                 "9781234567890",
-                "Desc"
+                "A long enough description to pass validation rules."
             );
 
             service.processSingleItem(item);

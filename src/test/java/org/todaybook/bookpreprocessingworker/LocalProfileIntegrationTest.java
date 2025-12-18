@@ -10,12 +10,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -23,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import org.todaybook.bookpreprocessingworker.domain.model.Book;
 
 /**
  * Local 프로파일 통합 테스트
@@ -52,7 +58,8 @@ class LocalProfileIntegrationTest {
     private ApplicationContext applicationContext;
 
     @Autowired
-    private KafkaTemplate<String, Object> kafkaTemplate;
+    @Qualifier("bookKafkaTemplate")
+    private KafkaTemplate<String, Book> kafkaTemplate;
 
     @Value("${spring.kafka.bootstrap-servers}")
     private String bootstrapServers;
@@ -126,9 +133,20 @@ class LocalProfileIntegrationTest {
     @Test
     @DisplayName("Kafka로 메시지를 전송할 수 있어야 한다")
     void canSendMessageToKafka() throws ExecutionException, InterruptedException, TimeoutException {
-        String testMessage = "Integration Test Message - " + System.currentTimeMillis();
+        String testMessage = """
+            {
+              "title": "Integration Test Book",
+              "author": "Integration Author",
+              "isbn": "9781234567890",
+              "description": "Integration test description long enough for validation."
+            }
+            """;
 
-        kafkaTemplate.send(inputTopic, testMessage).get(10, TimeUnit.SECONDS);
+        KafkaTemplate<String, String> rawTemplate = new KafkaTemplate<>(
+            new DefaultKafkaProducerFactory<>(producerProps(), new StringSerializer(), new StringSerializer())
+        );
+
+        rawTemplate.send(inputTopic, "9781234567890", testMessage).get(10, TimeUnit.SECONDS);
 
         System.out.println(">>> [TEST] 메시지 전송 성공: topic=" + inputTopic + ", message=" + testMessage);
     }
@@ -137,12 +155,20 @@ class LocalProfileIntegrationTest {
     @DisplayName("application-local.yml 설정값이 올바르게 로드되어야 한다")
     void configurationPropertiesAreLoaded() {
         assertThat(bootstrapServers).isEqualTo("localhost:9092");
-        assertThat(inputTopic).isEqualTo("book.raw");
+        assertThat(inputTopic).isEqualTo("book.raw.naver");
         assertThat(outputTopic).isEqualTo("book.parsed");
 
         System.out.println(">>> [TEST] 설정값 확인:");
         System.out.println("    - bootstrap-servers: " + bootstrapServers);
         System.out.println("    - input-topic: " + inputTopic);
         System.out.println("    - output-topic: " + outputTopic);
+    }
+
+    private Map<String, Object> producerProps() {
+        return Map.of(
+            ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
+            ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
+            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class
+        );
     }
 }

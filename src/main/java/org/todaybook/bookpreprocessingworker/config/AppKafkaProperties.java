@@ -10,6 +10,8 @@ public class AppKafkaProperties {
     private String outputTopic;
     private String prefix;
     private String env;
+    private String jsonGroupId;
+    private String csvGroupId;
 
     /**
      * Kafka에서 사용될 입력 토픽의 이름을 반환한다.
@@ -79,5 +81,21 @@ public class AppKafkaProperties {
 
     public void setEnv(String env) {
         this.env = env;
+    }
+
+    public String getJsonGroupId() {
+        return jsonGroupId;
+    }
+
+    public void setJsonGroupId(String jsonGroupId) {
+        this.jsonGroupId = jsonGroupId;
+    }
+
+    public String getCsvGroupId() {
+        return csvGroupId;
+    }
+
+    public void setCsvGroupId(String csvGroupId) {
+        this.csvGroupId = csvGroupId;
     }
 }

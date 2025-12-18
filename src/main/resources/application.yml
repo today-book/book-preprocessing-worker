@@ -29,8 +29,10 @@ management:
         include: health
 app:
   kafka:
-    input-topic: book.raw
-    csv-input-topic: csv-book.raw
+    input-topic: book.raw.naver
+    csv-input-topic: book.raw.csv
     output-topic: book.parsed
     prefix:
     env:
+    json-group-id: book-preprocessor-naver
+    csv-group-id: book-preprocessor-csv

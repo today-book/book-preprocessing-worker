@@ -1,4 +1,4 @@
-package org.todaybook.bookpreprocessingworker.application.kafka;
+package org.todaybook.bookpreprocessingworker.infrastructure.kafka.listener;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,8 +16,12 @@ public class DeadLetterQueueListener {
     private static final Logger log = LoggerFactory.getLogger(DeadLetterQueueListener.class);
 
     @KafkaListener(
-        topics = "${app.kafka.input-topic}.DLT",
-        groupId = "dlq-monitor-group"
+        topics = {
+            "#{@topicNames.inputTopic() + '.DLT'}",
+            "#{@topicNames.csvInputTopic() + '.DLT'}"
+        },
+        groupId = "dlq-monitor-group",
+        containerFactory = "csvKafkaListenerContainerFactory"
     )
     public void monitorDeadLetter(
         @Payload String payload,

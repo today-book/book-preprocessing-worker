@@ -1,4 +1,4 @@
-package org.todaybook.bookpreprocessingworker.application.kafka;
+package org.todaybook.bookpreprocessingworker.infrastructure.kafka.listener;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 
@@ -30,7 +30,7 @@ class DeadLetterQueueListenerTest {
         void givenAllDlqHeaders_whenMonitorDeadLetter_thenLogsWithoutException() {
             // given
             String payload = "{\"title\":\"실패한 책\",\"isbn\":\"invalid\"}";
-            String originalTopic = "book.raw";
+            String originalTopic = "book.raw.naver";
             String exceptionMessage = "Failed to deserialize: Unrecognized token";
             byte[] exceptionStackTrace = "java.lang.RuntimeException: parse error\n\tat com.example.Test".getBytes(StandardCharsets.UTF_8);
 
@@ -56,7 +56,7 @@ class DeadLetterQueueListenerTest {
                     "author": "작가"
                 }
                 """;
-            String originalTopic = "book.raw";
+            String originalTopic = "book.raw.naver";
             String exceptionMessage = "Deserialization exception during processing";
             byte[] exceptionStackTrace = createStackTraceBytes();
 
@@ -81,7 +81,7 @@ class DeadLetterQueueListenerTest {
         void givenNullExceptionMessage_whenMonitorDeadLetter_thenHandlesGracefully() {
             // given
             String payload = "{\"title\":\"테스트\"}";
-            String originalTopic = "book.raw";
+            String originalTopic = "book.raw.naver";
             String exceptionMessage = null; // Optional header is null
             byte[] exceptionStackTrace = "stack trace".getBytes(StandardCharsets.UTF_8);
 
@@ -101,7 +101,7 @@ class DeadLetterQueueListenerTest {
         void givenNullStackTrace_whenMonitorDeadLetter_thenLogsNoStackTrace() {
             // given
             String payload = "{\"title\":\"테스트\"}";
-            String originalTopic = "book.raw";
+            String originalTopic = "book.raw.naver";
             String exceptionMessage = "Some error occurred";
             byte[] exceptionStackTrace = null; // Optional header is null
 
@@ -121,7 +121,7 @@ class DeadLetterQueueListenerTest {
         void givenBothOptionalHeadersNull_whenMonitorDeadLetter_thenLogsSuccessfully() {
             // given
             String payload = "{\"corrupted\":\"data\"}";
-            String originalTopic = "book.raw";
+            String originalTopic = "book.raw.naver";
 
             // when & then
             assertThatCode(() ->
@@ -144,7 +144,7 @@ class DeadLetterQueueListenerTest {
         void givenEmptyPayload_whenMonitorDeadLetter_thenHandlesGracefully() {
             // given
             String payload = "";
-            String originalTopic = "book.raw";
+            String originalTopic = "book.raw.naver";
             String exceptionMessage = "Empty payload received";
 
             // when & then
@@ -163,7 +163,7 @@ class DeadLetterQueueListenerTest {
         void givenMalformedJsonPayload_whenMonitorDeadLetter_thenLogsPayloadAsIs() {
             // given
             String malformedPayload = "{ this is not valid json }}}";
-            String originalTopic = "book.raw";
+            String originalTopic = "book.raw.naver";
             String exceptionMessage = "JSON parse error";
 
             // when & then
@@ -182,7 +182,7 @@ class DeadLetterQueueListenerTest {
         void givenVeryLongPayload_whenMonitorDeadLetter_thenLogsSuccessfully() {
             // given
             String longPayload = "X".repeat(100000); // 100KB payload
-            String originalTopic = "book.raw";
+            String originalTopic = "book.raw.naver";
             String exceptionMessage = "Payload too large";
 
             // when & then
@@ -206,7 +206,7 @@ class DeadLetterQueueListenerTest {
                     "description": "\\n\\t\\r특수문자\\u0000포함"
                 }
                 """;
-            String originalTopic = "book.raw";
+            String originalTopic = "book.raw.naver";
             String exceptionMessage = "Validation failed";
 
             // when & then
@@ -225,7 +225,7 @@ class DeadLetterQueueListenerTest {
         void givenKoreanPayload_whenMonitorDeadLetter_thenHandlesUnicodeCorrectly() {
             // given
             String koreanPayload = "{\"title\":\"한글 테스트\",\"author\":\"김작가\"}";
-            String originalTopic = "book.raw";
+            String originalTopic = "book.raw.naver";
             String exceptionMessage = "처리 중 오류 발생";
             byte[] koreanStackTrace = "java.lang.Exception: 한글 예외 메시지".getBytes(StandardCharsets.UTF_8);
 
@@ -274,7 +274,7 @@ class DeadLetterQueueListenerTest {
         void givenEmptyStackTraceBytes_whenMonitorDeadLetter_thenHandlesGracefully() {
             // given
             String payload = "{\"test\":\"data\"}";
-            String originalTopic = "book.raw";
+            String originalTopic = "book.raw.naver";
             String exceptionMessage = "Error";
             byte[] emptyStackTrace = new byte[0];
 
@@ -294,7 +294,7 @@ class DeadLetterQueueListenerTest {
         void givenFullStackTrace_whenMonitorDeadLetter_thenDecodesCorrectly() {
             // given
             String payload = "{\"test\":\"data\"}";
-            String originalTopic = "book.raw";
+            String originalTopic = "book.raw.naver";
             String exceptionMessage = "JSON parsing failed";
             byte[] fullStackTrace = """
                 com.fasterxml.jackson.core.JsonParseException: Unexpected character
@@ -326,7 +326,7 @@ class DeadLetterQueueListenerTest {
         void givenJsonDeserializationError_whenMonitorDeadLetter_thenLogsAppropriately() {
             // given - simulating a real DLQ message from deserialization failure
             String payload = "not a json at all - just random text";
-            String originalTopic = "book.raw";
+            String originalTopic = "book.raw.naver";
             String exceptionMessage = "Cannot deserialize value of type NaverBookItem from String";
             byte[] stackTrace = createDeserializationExceptionStackTrace();
 
@@ -346,7 +346,7 @@ class DeadLetterQueueListenerTest {
         void givenKafkaProcessingError_whenMonitorDeadLetter_thenLogsCorrectly() {
             // given - simulating Kafka processing error
             String payload = "{\"title\":\"valid but problematic\",\"isbn\":\"test\",\"author\":\"auth\",\"description\":\"desc\"}";
-            String originalTopic = "book.raw";
+            String originalTopic = "book.raw.naver";
             String exceptionMessage = "Listener method threw exception";
             byte[] stackTrace = "org.springframework.kafka.listener.ListenerExecutionFailedException".getBytes(StandardCharsets.UTF_8);
 
@@ -366,7 +366,7 @@ class DeadLetterQueueListenerTest {
         void givenRetryExhaustedError_whenMonitorDeadLetter_thenLogsRetryInfo() {
             // given - message after retries exhausted
             String payload = "{\"title\":\"책\",\"isbn\":\"123\",\"author\":\"저자\",\"description\":\"설명\"}";
-            String originalTopic = "book.raw";
+            String originalTopic = "book.raw.naver";
             String exceptionMessage = "Retries exhausted after 3 attempts";
             byte[] stackTrace = "org.springframework.kafka.listener.SeekUtils: Seek to current after exception".getBytes(StandardCharsets.UTF_8);
 
