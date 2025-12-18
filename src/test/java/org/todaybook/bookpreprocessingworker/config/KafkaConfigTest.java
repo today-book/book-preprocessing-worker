@@ -10,6 +10,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
@@ -20,9 +21,13 @@ import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
+import org.todaybook.bookpreprocessingworker.application.dto.NaverBookItem;
+import org.todaybook.bookpreprocessingworker.domain.model.Book;
+import org.springframework.kafka.support.serializer.JsonDeserializer;
+import org.springframework.kafka.support.serializer.JsonSerializer;
 
 @SpringBootTest
-@EmbeddedKafka(partitions = 1, topics = {"book.raw", "csv-book.raw", "book.parsed", "book.raw.DLT"})
+@EmbeddedKafka(partitions = 1, topics = {"book.raw.naver", "book.raw.csv", "book.parsed", "book.raw.naver.DLT"})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @ActiveProfiles("test")
 @DisplayName("KafkaConfig Integration Tests")
@@ -32,16 +37,23 @@ class KafkaConfigTest {
     private KafkaConfig kafkaConfig;
 
     @Autowired
-    private KafkaTemplate<String, Object> kafkaTemplate;
+    @Qualifier("bookKafkaTemplate")
+    private KafkaTemplate<String, Book> kafkaTemplate;
 
     @Autowired
-    private ProducerFactory<String, Object> bookProducerFactory;
+    private ProducerFactory<String, Book> bookProducerFactory;
 
     @Autowired
-    private ConsumerFactory<Object, Object> bookConsumerFactory;
+    private ConsumerFactory<String, String> csvConsumerFactory;
 
     @Autowired
-    private ConcurrentKafkaListenerContainerFactory<Object, Object> kafkaListenerContainerFactory;
+    private ConsumerFactory<String, NaverBookItem> jsonConsumerFactory;
+
+    @Autowired
+    private ConcurrentKafkaListenerContainerFactory<String, String> csvKafkaListenerContainerFactory;
+
+    @Autowired
+    private ConcurrentKafkaListenerContainerFactory<String, NaverBookItem> jsonKafkaListenerContainerFactory;
 
     @Autowired
     private CommonErrorHandler dlqErrorHandler;
@@ -71,13 +83,15 @@ class KafkaConfigTest {
         @Test
         @DisplayName("Given_ApplicationContext_When_StartUp_Then_ConsumerFactoryExists")
         void givenApplicationContext_whenStartUp_thenConsumerFactoryExists() {
-            assertThat(bookConsumerFactory).isNotNull();
+            assertThat(csvConsumerFactory).isNotNull();
+            assertThat(jsonConsumerFactory).isNotNull();
         }
 
         @Test
         @DisplayName("Given_ApplicationContext_When_StartUp_Then_ListenerContainerFactoryExists")
         void givenApplicationContext_whenStartUp_thenListenerContainerFactoryExists() {
-            assertThat(kafkaListenerContainerFactory).isNotNull();
+            assertThat(csvKafkaListenerContainerFactory).isNotNull();
+            assertThat(jsonKafkaListenerContainerFactory).isNotNull();
         }
 
         @Test
@@ -92,8 +106,8 @@ class KafkaConfigTest {
     class ProducerConfigurationTests {
 
         @Test
-        @DisplayName("Given_ProducerFactory_When_GetConfig_Then_UsesStringSerializer")
-        void givenProducerFactory_whenGetConfig_thenUsesStringSerializer() {
+        @DisplayName("Given_ProducerFactory_When_GetConfig_Then_UsesJsonSerializer")
+        void givenProducerFactory_whenGetConfig_thenUsesJsonSerializer() {
             // when
             var configurationProperties = bookProducerFactory.getConfigurationProperties();
 
@@ -101,7 +115,7 @@ class KafkaConfigTest {
             assertThat(configurationProperties.get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG))
                 .isEqualTo(StringSerializer.class);
             assertThat(configurationProperties.get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG))
-                .isEqualTo(StringSerializer.class);
+                .isEqualTo(JsonSerializer.class);
         }
 
         @Test
@@ -116,16 +130,29 @@ class KafkaConfigTest {
     class ConsumerConfigurationTests {
 
         @Test
-        @DisplayName("Given_ConsumerFactory_When_GetConfig_Then_UsesStringDeserializer")
-        void givenConsumerFactory_whenGetConfig_thenUsesStringDeserializer() {
+        @DisplayName("Given_CsvConsumerFactory_When_GetConfig_Then_UsesStringDeserializer")
+        void givenCsvConsumerFactory_whenGetConfig_thenUsesStringDeserializer() {
             // when
-            var configurationProperties = bookConsumerFactory.getConfigurationProperties();
+            var configurationProperties = csvConsumerFactory.getConfigurationProperties();
 
             // then
             assertThat(configurationProperties.get(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG))
                 .isEqualTo(StringDeserializer.class);
             assertThat(configurationProperties.get(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG))
                 .isEqualTo(StringDeserializer.class);
+        }
+
+        @Test
+        @DisplayName("Given_JsonConsumerFactory_When_GetConfig_Then_UsesStringKeyDeserializer")
+        void givenJsonConsumerFactory_whenGetConfig_thenUsesStringKeyDeserializer() {
+            // when
+            var configurationProperties = jsonConsumerFactory.getConfigurationProperties();
+
+            // then - key deserializer is configured via properties
+            assertThat(configurationProperties.get(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG))
+                .isEqualTo(StringDeserializer.class);
+            // value deserializer is provided as instance, not via properties
+            // so it won't appear in configuration properties
         }
     }
 
@@ -143,7 +170,8 @@ class KafkaConfigTest {
         @DisplayName("Given_ListenerContainerFactory_When_Check_Then_HasErrorHandler")
         void givenListenerContainerFactory_whenCheck_thenHasErrorHandler() {
             // The container factory should have an error handler configured
-            assertThat(kafkaListenerContainerFactory.getContainerProperties()).isNotNull();
+            assertThat(csvKafkaListenerContainerFactory.getContainerProperties()).isNotNull();
+            assertThat(jsonKafkaListenerContainerFactory.getContainerProperties()).isNotNull();
         }
     }
 }

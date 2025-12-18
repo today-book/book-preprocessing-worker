@@ -6,3 +6,9 @@ spring:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     properties:
       security.protocol: PLAINTEXT
+
+logging:
+  level:
+    root: INFO
+    org.todaybook: INFO
+    org.todaybook.bookpreprocessingworker: DEBUG

@@ -30,12 +30,12 @@ import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
-import org.todaybook.bookpreprocessingworker.application.dto.BookConsumeMessage;
+import org.todaybook.bookpreprocessingworker.domain.model.Book;
 
 @SpringBootTest
 @EmbeddedKafka(
     partitions = 1,
-    topics = {"book.raw", "csv-book.raw", "book.parsed", "book.raw.DLT"},
+    topics = {"book.raw.naver", "book.raw.csv", "book.parsed", "book.raw.naver.DLT"},
     brokerProperties = {
         "listeners=PLAINTEXT://localhost:0",
         "port=0"
@@ -46,9 +46,9 @@ import org.todaybook.bookpreprocessingworker.application.dto.BookConsumeMessage;
 @DisplayName("Kafka End-to-End Integration Tests")
 class KafkaIntegrationTest {
 
-    private static final String INPUT_TOPIC = "book.raw";
+    private static final String INPUT_TOPIC = "book.raw.naver";
     private static final String OUTPUT_TOPIC = "book.parsed";
-    private static final String DLT_TOPIC = "book.raw.DLT";
+    private static final String DLT_TOPIC = "book.raw.naver.DLT";
 
     @Autowired
     @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
@@ -115,7 +115,7 @@ class KafkaIntegrationTest {
                     "publisher": "인사이트",
                     "pubdate": "20181101",
                     "isbn": "9788966262281",
-                    "description": "자바 개발자를 위한 필독서"
+                    "description": "자바 개발자를 위한 필독서로 널리 알려진 책입니다."
                 }
                 """;
 
@@ -130,7 +130,7 @@ class KafkaIntegrationTest {
                 ConsumerRecord<String, String> record = records.iterator().next();
                 assertThat(record.key()).isEqualTo("9788966262281");
 
-                BookConsumeMessage message = objectMapper.readValue(record.value(), BookConsumeMessage.class);
+                Book message = objectMapper.readValue(record.value(), Book.class);
                 assertThat(message.isbn()).isEqualTo("9788966262281");
                 assertThat(message.title()).isEqualTo("이펙티브 자바");
                 assertThat(message.author()).isEqualTo("조슈아 블로크");
@@ -148,7 +148,7 @@ class KafkaIntegrationTest {
                     "author": "에릭 프리먼",
                     "publisher": "한빛미디어",
                     "pubdate": "20050901",
-                    "description": "디자인 패턴 입문서"
+                    "description": "디자인 패턴 입문서로 충분한 설명을 포함합니다."
                 }
                 """;
 
@@ -161,7 +161,7 @@ class KafkaIntegrationTest {
                 assertThat(records.count()).isGreaterThan(0);
 
                 ConsumerRecord<String, String> record = records.iterator().next();
-                BookConsumeMessage message = objectMapper.readValue(record.value(), BookConsumeMessage.class);
+                Book message = objectMapper.readValue(record.value(), Book.class);
                 assertThat(message.title()).isEqualTo("헤드 퍼스트 디자인 패턴");
                 assertThat(message.title()).doesNotContain("<b>", "</b>");
             });
@@ -178,7 +178,7 @@ class KafkaIntegrationTest {
                     "author": "저자",
                     "publisher": "출판사",
                     "pubdate": "20231225",
-                    "description": "설명"
+                    "description": "테스트용 설명으로 최소 길이 요건을 충족합니다."
                 }
                 """;
 
@@ -193,7 +193,7 @@ class KafkaIntegrationTest {
                 ConsumerRecord<String, String> record = records.iterator().next();
                 assertThat(record.key()).isEqualTo("9788966262281");
 
-                BookConsumeMessage message = objectMapper.readValue(record.value(), BookConsumeMessage.class);
+                Book message = objectMapper.readValue(record.value(), Book.class);
                 assertThat(message.isbn()).isEqualTo("9788966262281");
             });
         }
@@ -209,13 +209,13 @@ class KafkaIntegrationTest {
             // given
             String[] messages = {
                 """
-                {"title":"책1","isbn":"9781111111111","author":"저자1","publisher":"출판사1","pubdate":"20230101","description":"설명1"}
+                {"title":"책1","isbn":"9781111111111","author":"저자1","publisher":"출판사1","pubdate":"20230101","description":"설명1이 충분히 길어서 요건을 충족합니다."}
                 """,
                 """
-                {"title":"책2","isbn":"9782222222222","author":"저자2","publisher":"출판사2","pubdate":"20230202","description":"설명2"}
+                {"title":"책2","isbn":"9782222222222","author":"저자2","publisher":"출판사2","pubdate":"20230202","description":"설명2가 충분히 길어서 요건을 충족합니다."}
                 """,
                 """
-                {"title":"책3","isbn":"9783333333333","author":"저자3","publisher":"출판사3","pubdate":"20230303","description":"설명3"}
+                {"title":"책3","isbn":"9783333333333","author":"저자3","publisher":"출판사3","pubdate":"20230303","description":"설명3도 충분히 길어서 요건을 충족합니다."}
                 """
             };
 
@@ -272,7 +272,7 @@ class KafkaIntegrationTest {
                     "author": "저자",
                     "publisher": "출판사",
                     "pubdate": "20231225",
-                    "description": "설명"
+                    "description": "날짜 파싱 테스트를 위한 충분히 긴 설명입니다."
                 }
                 """;
 
@@ -285,7 +285,7 @@ class KafkaIntegrationTest {
                 assertThat(records.count()).isGreaterThan(0);
 
                 ConsumerRecord<String, String> record = records.iterator().next();
-                BookConsumeMessage message = objectMapper.readValue(record.value(), BookConsumeMessage.class);
+                Book message = objectMapper.readValue(record.value(), Book.class);
                 assertThat(message.publishedAt()).isNotNull();
                 assertThat(message.publishedAt().getYear()).isEqualTo(2023);
                 assertThat(message.publishedAt().getMonthValue()).isEqualTo(12);
@@ -304,7 +304,7 @@ class KafkaIntegrationTest {
                     "author": "저자",
                     "publisher": "출판사",
                     "pubdate": "INVALID_DATE",
-                    "description": "설명"
+                    "description": "잘못된 날짜라도 설명은 충분히 깁니다."
                 }
                 """;
 
@@ -317,7 +317,7 @@ class KafkaIntegrationTest {
                 assertThat(records.count()).isGreaterThan(0);
 
                 ConsumerRecord<String, String> record = records.iterator().next();
-                BookConsumeMessage message = objectMapper.readValue(record.value(), BookConsumeMessage.class);
+                Book message = objectMapper.readValue(record.value(), Book.class);
                 assertThat(message.publishedAt()).isNull();
             });
         }
@@ -356,10 +356,10 @@ class KafkaIntegrationTest {
                 ConsumerRecord<String, String> record = records.iterator().next();
                 assertThat(record.key()).isEqualTo("9791192618944");
 
-                BookConsumeMessage message = objectMapper.readValue(record.value(), BookConsumeMessage.class);
+                Book message = objectMapper.readValue(record.value(), Book.class);
                 assertThat(message.isbn()).isEqualTo("9791192618944");
                 assertThat(message.title()).contains("르몽드 디플로마티크");
-                assertThat(message.author()).contains("^"); // Multiple authors
+                assertThat(message.author()).isEqualTo("브누아 브레빌");
                 assertThat(message.thumbnail()).contains("pstatic.net");
                 assertThat(message.categories()).isEmpty();
             });

@@ -1,4 +1,4 @@
-package org.todaybook.bookpreprocessingworker.common.kafka;
+package org.todaybook.common.kafka;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

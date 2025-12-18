@@ -4,7 +4,7 @@ import org.todaybook.bookpreprocessingworker.application.dto.NaverBookItem;
 
 public interface BookMessageUseCase {
 
-    void processCsvRow(String csvRow);
+    void processRawRow(String rawRow);
 
     void processSingleItem(NaverBookItem item);
 }

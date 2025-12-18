@@ -1,7 +1,5 @@
 package org.todaybook.bookpreprocessingworker.infrastructure.kafka.listener;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -10,33 +8,29 @@ import org.todaybook.bookpreprocessingworker.application.dto.NaverBookItem;
 import org.todaybook.bookpreprocessingworker.application.port.in.BookMessageUseCase;
 
 @Component
-public class JsonBookKafkaListener implements BookMessageListener {
+public class JsonBookKafkaListener implements BookMessageListener<NaverBookItem> {
 
     private static final Logger log = LoggerFactory.getLogger(JsonBookKafkaListener.class);
 
     private final BookMessageUseCase bookMessageUseCase;
-    private final ObjectMapper objectMapper;
 
-    public JsonBookKafkaListener(BookMessageUseCase bookMessageUseCase, ObjectMapper objectMapper) {
+    public JsonBookKafkaListener(BookMessageUseCase bookMessageUseCase) {
         this.bookMessageUseCase = bookMessageUseCase;
-        this.objectMapper = objectMapper;
     }
 
     @Override
     @KafkaListener(
         topics = "#{@topicNames.inputTopic()}",
-        groupId = "${spring.kafka.consumer.group-id}"
+        groupId = "${app.kafka.json-group-id:${spring.kafka.consumer.group-id}}",
+        containerFactory = "jsonKafkaListenerContainerFactory"
     )
-    public void onMessage(String payload) throws JsonProcessingException {
-        log.info(">>> [book.raw] received payload length = {}", payload == null ? 0 : payload.length());
-
-        NaverBookItem item = objectMapper.readValue(payload, NaverBookItem.class);
-
-        if (item == null) {
-            log.warn("Deserialized item is null. payload={}", payload);
+    public void onMessage(NaverBookItem payload) {
+        if (payload == null) {
+            log.warn(">>> [book.raw.naver] received null payload");
             return;
         }
 
-        bookMessageUseCase.processSingleItem(item);
+        log.info(">>> [book.raw.naver] received isbn={}", payload.isbn());
+        bookMessageUseCase.processSingleItem(payload);
     }
 }

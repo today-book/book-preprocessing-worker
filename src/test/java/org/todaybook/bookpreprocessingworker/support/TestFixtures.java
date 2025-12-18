@@ -1,9 +1,7 @@
 package org.todaybook.bookpreprocessingworker.support;
 
-import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
-import org.todaybook.bookpreprocessingworker.application.dto.BookConsumeMessage;
 import org.todaybook.bookpreprocessingworker.application.dto.NaverBookItem;
 
 /**
@@ -207,42 +205,6 @@ public final class TestFixtures {
 
     public static List<NaverBookItem> createEmptyItemList() {
         return Collections.emptyList();
-    }
-
-    // ===========================================
-    // BookConsumeMessage Fixtures
-    // ===========================================
-
-    /**
-     * Creates a valid BookConsumeMessage.
-     */
-    public static BookConsumeMessage createValidBookConsumeMessage() {
-        return new BookConsumeMessage(
-            "9788966262281",
-            "이펙티브 자바",
-            Collections.emptyList(),
-            "자바 개발자를 위한 필독서입니다.",
-            "조슈아 블로크",
-            "인사이트",
-            LocalDate.of(2018, 11, 1),
-            "https://shopping-phinf.pstatic.net/main_123/123.jpg"
-        );
-    }
-
-    /**
-     * Creates a BookConsumeMessage with null publishedAt.
-     */
-    public static BookConsumeMessage createBookConsumeMessageWithNullDate() {
-        return new BookConsumeMessage(
-            "9781234567890",
-            "날짜 없는 책",
-            Collections.emptyList(),
-            "날짜가 파싱되지 않은 책",
-            "저자",
-            "출판사",
-            null,
-            "https://image.com/book.jpg"
-        );
     }
 
     // ===========================================

@@ -1,4 +1,4 @@
-package org.todaybook.bookpreprocessingworker.common.kafka;
+package org.todaybook.common.kafka;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;

@@ -11,16 +11,16 @@ class TopicNamesTest {
     @DisplayName("Explicit topics take precedence over prefix/env")
     void explicitTopicsOverridePrefixEnv() {
         AppKafkaProperties props = new AppKafkaProperties();
-        props.setInputTopic("book.raw");
-        props.setCsvInputTopic("csv-book.raw");
+        props.setInputTopic("book.raw.naver");
+        props.setCsvInputTopic("book.raw.csv");
         props.setOutputTopic("book.parsed");
         props.setPrefix("prefix");
         props.setEnv("dev");
 
         TopicNames names = new TopicNames(props);
 
-        assertThat(names.inputTopic()).isEqualTo("book.raw");
-        assertThat(names.csvInputTopic()).isEqualTo("csv-book.raw");
+        assertThat(names.inputTopic()).isEqualTo("book.raw.naver");
+        assertThat(names.csvInputTopic()).isEqualTo("book.raw.csv");
         assertThat(names.outputTopic()).isEqualTo("book.parsed");
     }
 

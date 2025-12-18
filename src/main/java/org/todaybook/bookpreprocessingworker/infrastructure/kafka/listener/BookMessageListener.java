@@ -1,6 +1,6 @@
 package org.todaybook.bookpreprocessingworker.infrastructure.kafka.listener;
 
-public interface BookMessageListener {
+public interface BookMessageListener<T> {
 
-    void onMessage(String payload) throws Exception;
+    void onMessage(T payload);
 }

@@ -36,15 +36,14 @@ import org.todaybook.bookpreprocessingworker.domain.model.Book;
 @TestPropertySource(properties = {
     "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}",
     "spring.kafka.consumer.auto-offset-reset=earliest",
-    "spring.kafka.consumer.group-id=embedded-book-preprocessor",
+    "spring.kafka.consumer.group-id=csv-embedded-book-preprocessor",
     "app.kafka.input-topic=book.raw.naver",
     "app.kafka.csv-input-topic=book.raw.csv",
     "app.kafka.output-topic=book.parsed"
 })
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
-class EmbeddedKafkaBookFlowTest {
+class EmbeddedKafkaRawRowFlowTest {
 
-    private static final String INPUT_TOPIC = "book.raw.naver";
     private KafkaTemplate<String, String> inputKafkaTemplate;
 
     @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
@@ -66,7 +65,7 @@ class EmbeddedKafkaBookFlowTest {
             new DefaultKafkaProducerFactory<>(producerProps, new StringSerializer(), new StringSerializer())
         );
 
-        Map<String, Object> consumerProps = KafkaTestUtils.consumerProps("embedded-output-consumer", "false", embeddedKafka);
+        Map<String, Object> consumerProps = KafkaTestUtils.consumerProps("csv-embedded-output-consumer", "false", embeddedKafka);
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
 
@@ -82,34 +81,21 @@ class EmbeddedKafkaBookFlowTest {
     }
 
     @Test
-    void consumeAndProduce_endToEnd() throws Exception {
-        String payload = """
-            {
-              "title": "<b>Sample Book</b>",
-              "link": "http://example.com/book",
-              "image": "http://example.com/book.jpg",
-              "author": "Test Author",
-              "price": "15000",
-              "discount": "12000",
-              "publisher": "Test Pub",
-              "pubdate": "20240102",
-              "isbn": "9781234567890 123456789X",
-              "description": "Sample description for embedded test with sufficient length."
-            }
-            """;
+    void consumeRawRowAndProduce_endToEnd() throws Exception {
+        String rawPayload = "\"115982\",\"9780761921585\",\"cloth\",\"Designing for learning\",\"George W. Gagnon\",\"Corwin Press\",\"\",\"\",\"121081\",\"http://image.aladin.co.kr/cover.jpg\",\"A great book about education and learning practices.\",\"\",\"slug\",\"\",\"2000-12-29\",\"Y\",\"Y\",\"0761921583 (cloth)\"";
 
-        inputKafkaTemplate.send(INPUT_TOPIC, "9781234567890", payload).get();
+        inputKafkaTemplate.send(topicNames.csvInputTopic(), "9780761921585", rawPayload).get();
         inputKafkaTemplate.flush();
 
         await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
             ConsumerRecord<String, String> record = KafkaTestUtils.getSingleRecord(outputConsumer, topicNames.outputTopic());
             Book processed = objectMapper.readValue(record.value(), Book.class);
 
-            assertThat(processed.isbn()).isEqualTo("9781234567890");
-            assertThat(processed.title()).isEqualTo("Sample Book");
-            assertThat(processed.author()).isEqualTo("Test Author");
-            assertThat(processed.description()).contains("embedded test");
+            assertThat(processed.isbn()).isEqualTo("9780761921585");
+            assertThat(processed.title()).isEqualTo("Designing for learning");
+            assertThat(processed.author()).isEqualTo("George W. Gagnon");
+            assertThat(processed.publisher()).isEqualTo("Corwin Press");
+            assertThat(processed.description()).isEqualTo("A great book about education and learning practices.");
         });
     }
-
 }

@@ -1,4 +1,4 @@
-package org.todaybook.bookpreprocessingworker.common.kafka;
+package org.todaybook.common.kafka;
 
 /**
  * Minimal outbound port for publishing messages. Implementation details (Kafka, HTTP, etc.)

@@ -29,6 +29,8 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    implementation 'org.slf4j:slf4j-api'
 }
 
 tasks.test {

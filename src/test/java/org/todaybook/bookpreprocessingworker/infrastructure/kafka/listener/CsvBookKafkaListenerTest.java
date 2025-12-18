@@ -26,15 +26,15 @@ class CsvBookKafkaListenerTest {
     }
 
     @Test
-    @DisplayName("Given_CsvPayload_When_OnMessage_Then_DelegatesToCsvProcessor")
-    void givenCsvPayload_whenOnMessage_thenDelegatesToCsvProcessor() {
+    @DisplayName("Given_RawPayload_When_OnMessage_Then_DelegatesToRawProcessor")
+    void givenRawPayload_whenOnMessage_thenDelegatesToRawProcessor() {
         // given
-        String csvPayload = "\"115982\",\"9780761921585\",\"cloth\",\"Title\",\"Author\",\"Publisher\",\"\",\"\",\"121081\",\"http://image\",\"\",\"\",\"slug\",\"\",\"2000-12-29\",\"Y\",\"Y\",\"0761921583 (cloth)\"";
+        String rawPayload = "\"115982\",\"9780761921585\",\"cloth\",\"Title\",\"Author\",\"Publisher\",\"\",\"\",\"121081\",\"http://image\",\"\",\"\",\"slug\",\"\",\"2000-12-29\",\"Y\",\"Y\",\"0761921583 (cloth)\"";
 
         // when
-        listener.onMessage(csvPayload);
+        listener.onMessage(rawPayload);
 
         // then
-        then(bookMessageUseCase).should(times(1)).processCsvRow(csvPayload);
+        then(bookMessageUseCase).should(times(1)).processRawRow(rawPayload);
     }
 }

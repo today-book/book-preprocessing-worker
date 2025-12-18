@@ -6,8 +6,11 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.todaybook.bookpreprocessingworker.application.port.in.BookMessageUseCase;
 
+/**
+ * Listener for the topic named "book.raw.csv". Payload is a raw quoted row string, not a CSV file.
+ */
 @Component
-public class CsvBookKafkaListener implements BookMessageListener {
+public class CsvBookKafkaListener implements BookMessageListener<String> {
 
     private static final Logger log = LoggerFactory.getLogger(CsvBookKafkaListener.class);
 
@@ -20,10 +23,11 @@ public class CsvBookKafkaListener implements BookMessageListener {
     @Override
     @KafkaListener(
         topics = "#{@topicNames.csvInputTopic()}",
-        groupId = "${spring.kafka.consumer.group-id}"
+        groupId = "${app.kafka.csv-group-id:${spring.kafka.consumer.group-id}}",
+        containerFactory = "csvKafkaListenerContainerFactory"
     )
     public void onMessage(String payload) {
-        log.info(">>> [csv-book.raw] received payload length = {}", payload == null ? 0 : payload.length());
-        bookMessageUseCase.processCsvRow(payload);
+        log.info(">>> [book.raw.csv] received payload length = {}", payload == null ? 0 : payload.length());
+        bookMessageUseCase.processRawRow(payload);
     }
 }

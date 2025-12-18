@@ -1,4 +1,4 @@
-package org.todaybook.bookpreprocessingworker.common.kafka;
+package org.todaybook.common.kafka;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;

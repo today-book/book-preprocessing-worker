@@ -1,4 +1,4 @@
-package org.todaybook.bookpreprocessingworker.common.kafka;
+package org.todaybook.common.kafka;
 
 import java.util.Map;
 import org.apache.kafka.clients.producer.ProducerConfig;

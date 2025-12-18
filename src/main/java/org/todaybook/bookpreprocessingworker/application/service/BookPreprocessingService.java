@@ -3,7 +3,11 @@ package org.todaybook.bookpreprocessingworker.application.service;
 import io.micrometer.common.util.StringUtils;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
+import java.util.regex.Pattern;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -16,139 +20,159 @@ import org.todaybook.bookpreprocessingworker.domain.model.Book;
 public class BookPreprocessingService implements BookMessageUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(BookPreprocessingService.class);
-    private static final DateTimeFormatter NAVER_PUBDATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
-    private static final DateTimeFormatter CSV_PUBDATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-    private static final int CSV_ISBN_13_INDEX = 1;
-    private static final int CSV_TITLE_INDEX = 3;
-    private static final int CSV_AUTHOR_INDEX = 4;
-    private static final int CSV_PUBLISHER_INDEX = 5;
-    private static final int CSV_IMAGE_INDEX = 9;
-    private static final int CSV_DESCRIPTION_INDEX = 10;
-    private static final int CSV_PUBDATE_INDEX = 14;
-    private static final int CSV_FALLBACK_ISBN_INDEX = 17;
+    private static final int MIN_DESCRIPTION_LENGTH = 30;
+
+    // ===================== Date Formats =====================
+
+    private static final DateTimeFormatter NAVER_PUBDATE_FORMAT =
+        DateTimeFormatter.ofPattern("yyyyMMdd");
+
+    private static final DateTimeFormatter RAW_PUBDATE_FORMAT =
+        DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    // ===================== Raw Row Column Index =====================
+
+    private static final int RAW_ISBN_13_INDEX = 1;
+    private static final int RAW_TITLE_INDEX = 3;
+    private static final int RAW_AUTHOR_INDEX = 4;
+    private static final int RAW_PUBLISHER_INDEX = 5;
+    private static final int RAW_IMAGE_INDEX = 9;
+    private static final int RAW_DESCRIPTION_INDEX = 10;
+    private static final int RAW_PUBDATE_INDEX = 14;
+    private static final int RAW_FALLBACK_ISBN_INDEX = 17;
+
+    private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]*>");
+    private static final Pattern AUTHOR_SEPARATOR_PATTERN = Pattern.compile(
+        "\\s*(\\^|;|\\||/|&|,|\\band\\b|\\+|·|ㆍ)\\s*",
+        Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern AUTHOR_ROLE_PATTERN = Pattern.compile(
+        "\\b(author|editor|translator|translated|illustrator|ed\\.|eds\\.|trans\\.)\\b",
+        Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern AUTHOR_ROLE_KR_PATTERN = Pattern.compile(
+        "(저자|지음|글쓴이|옮김|역자|번역|편저|편집|편역|감수|엮음|글씀|그림)"
+    );
 
     private final BookMessagePublisher publisher;
 
-    public BookPreprocessingService(
-        BookMessagePublisher publisher
-    ) {
+    public BookPreprocessingService(BookMessagePublisher publisher) {
         this.publisher = publisher;
     }
 
+    // =========================================================
+    // RAW STRING PROCESSING
+    // =========================================================
+
     @Override
-    public void processCsvRow(String csvRow) {
-        if (StringUtils.isBlank(csvRow)) {
-            log.warn("Skipping empty CSV row.");
+    public void processRawRow(String rawRow) {
+        if (StringUtils.isBlank(rawRow)) {
+            log.warn("Skipping empty raw row");
             return;
         }
 
-        var columns = parseCsvColumns(csvRow);
+        List<String> columns = parseRawColumns(rawRow);
         if (columns.isEmpty()) {
-            log.warn("Failed to parse CSV row: {}", csvRow);
+            log.warn("Skipping malformed raw row. columnSize={}", columns.size());
             return;
         }
 
-        String isbn = extractCsvIsbn(columns);
-        String title = getColumn(columns, CSV_TITLE_INDEX);
-        String author = getColumn(columns, CSV_AUTHOR_INDEX);
-        String publisherName = getColumn(columns, CSV_PUBLISHER_INDEX);
-        String description = firstNonBlank(
-            getColumn(columns, CSV_DESCRIPTION_INDEX),
-            getColumn(columns, CSV_DESCRIPTION_INDEX + 1) // fallback for minor shifts, but skip slug column
+        String isbn = extractRawIsbn(columns);
+        String title = cleanTitle(getColumn(columns, RAW_TITLE_INDEX));
+        String author = normalizeAuthor(getColumn(columns, RAW_AUTHOR_INDEX));
+        String description = normalizeDescription(
+            firstNonBlank(
+                getColumn(columns, RAW_DESCRIPTION_INDEX),
+                getColumn(columns, RAW_DESCRIPTION_INDEX + 1)
+            )
         );
-        String thumbnail = getColumn(columns, CSV_IMAGE_INDEX);
-        LocalDate publishedAt = parseCsvPublishDate(getColumn(columns, CSV_PUBDATE_INDEX), isbn);
 
-        if (StringUtils.isBlank(isbn) || StringUtils.isBlank(title)) {
-            log.info("Skipping CSV row due to missing required fields. isbn={}, title={}", isbn, title);
+        if (StringUtils.isBlank(isbn)) {
+            log.warn("Skipping raw row: missing or invalid isbn");
+            return;
+        }
+        if (StringUtils.isBlank(title)) {
+            log.warn("Skipping raw row: missing title. isbn={}", isbn);
+            return;
+        }
+        if (StringUtils.isBlank(author)) {
+            log.warn("Skipping raw row: missing author. isbn={}", isbn);
+            return;
+        }
+        if (StringUtils.isBlank(description)) {
+            log.warn("Skipping raw row: missing/short description. isbn={}", isbn);
             return;
         }
 
         Book book = new Book(
             isbn,
-            cleanTitle(title),
+            title,
             Collections.emptyList(),
             description,
             author,
-            publisherName,
-            publishedAt,
-            thumbnail
+            getColumn(columns, RAW_PUBLISHER_INDEX),
+            parseRawPublishDate(getColumn(columns, RAW_PUBDATE_INDEX), isbn),
+            normalizeThumbnail(getColumn(columns, RAW_IMAGE_INDEX))
         );
 
+        log.info("Publishing book from RAW. isbn={}, title={}", book.isbn(), book.title());
         publisher.publish(book);
     }
 
-    /**
-     * [변경] 반복문 메서드(process) 삭제됨.
-     * 단건 처리 메서드만 남겨둡니다.
-     */
+    // =========================================================
+    // NAVER API PROCESSING
+    // =========================================================
+
     @Override
     public void processSingleItem(NaverBookItem item) {
-        String rawIsbn = item.isbn();
-        String title = item.title();
-        String author = item.author();
-        String description = item.description();
-
-        // 필수 필드 검증 (비어있으면 로직 종료)
-        if (isInvalidItem(rawIsbn, title, author, description)) {
-            log.info("Skipping invalid item (missing required fields). ISBN={}, Title={}", rawIsbn, title);
+        if (item == null) {
+            log.warn("Skipping null Naver item");
             return;
         }
 
-        // 1. ISBN 파싱
-        String refinedIsbn = extractIsbn13(rawIsbn);
+        String refinedIsbn = extractNormalizedIsbn(item.isbn());
+        String title = cleanTitle(item.title());
+        String author = normalizeAuthor(item.author());
+        String description = normalizeDescription(item.description());
 
-        // 2. 날짜 변환
-        LocalDate publishedAt = parsePublishDateToDate(item.pubdate(), refinedIsbn);
+        if (StringUtils.isBlank(refinedIsbn)) {
+            log.warn("Skipping Naver item: missing or invalid isbn");
+            return;
+        }
+        if (StringUtils.isBlank(title)) {
+            log.warn("Skipping Naver item: missing title. isbn={}", refinedIsbn);
+            return;
+        }
+        if (StringUtils.isBlank(author)) {
+            log.warn("Skipping Naver item: missing author. isbn={}", refinedIsbn);
+            return;
+        }
+        if (StringUtils.isBlank(description)) {
+            log.warn("Skipping Naver item: missing/short description. isbn={}", refinedIsbn);
+            return;
+        }
 
-        // 3. 메시지 생성
         Book book = new Book(
             refinedIsbn,
-            cleanTitle(title),
+            title,
             Collections.emptyList(),
             description,
             author,
             item.publisher(),
-            publishedAt,
-            item.image()
+            parsePublishDateToDate(item.pubdate(), refinedIsbn),
+            normalizeThumbnail(item.image())
         );
 
-        // 4. Kafka 전송
+        log.info("Publishing book from NAVER. isbn={}, title={}", book.isbn(), book.title());
         publisher.publish(book);
     }
 
-    // --- Helper Methods (기존과 동일) ---
+    // =========================================================
+    // Helpers
+    // =========================================================
 
-    private LocalDate parseCsvPublishDate(String pubdateStr, String isbn) {
-        if (StringUtils.isBlank(pubdateStr)) return null;
-        try {
-            return LocalDate.parse(pubdateStr, CSV_PUBDATE_FORMAT);
-        } catch (Exception e) {
-            log.warn("Failed to parse CSV pubdate='{}' for isbn={}", pubdateStr, isbn);
-            return null;
-        }
-    }
-
-    private String extractCsvIsbn(java.util.List<String> columns) {
-        String primary = getColumn(columns, CSV_ISBN_13_INDEX);
-        String fallback = getColumn(columns, CSV_FALLBACK_ISBN_INDEX);
-
-        String normalizedPrimary = normalizeIsbn(primary);
-        if (normalizedPrimary != null) return normalizedPrimary;
-
-        return normalizeIsbn(fallback);
-    }
-
-    private String normalizeIsbn(String raw) {
-        if (StringUtils.isBlank(raw)) return null;
-        String digitsOnly = raw.replaceAll("[^0-9Xx]", "");
-        if (digitsOnly.length() >= 13) return digitsOnly.substring(0, 13);
-        if (digitsOnly.length() == 10) return digitsOnly;
-        return raw.trim();
-    }
-
-    private java.util.List<String> parseCsvColumns(String row) {
-        java.util.List<String> columns = new java.util.ArrayList<>();
+    private List<String> parseRawColumns(String row) {
+        List<String> columns = new ArrayList<>();
         StringBuilder current = new StringBuilder();
         boolean inQuotes = false;
 
@@ -169,51 +193,145 @@ public class BookPreprocessingService implements BookMessageUseCase {
             }
         }
         columns.add(current.toString().trim());
-
         return columns;
     }
 
-    private String getColumn(java.util.List<String> columns, int index) {
+    private String extractRawIsbn(List<String> columns) {
+        return firstNonBlank(
+            normalizeIsbn(getColumn(columns, RAW_ISBN_13_INDEX)),
+            normalizeIsbn(getColumn(columns, RAW_FALLBACK_ISBN_INDEX))
+        );
+    }
+
+    private String normalizeIsbn(String raw) {
+        if (StringUtils.isBlank(raw)) {
+            return null;
+        }
+
+        String digits = raw.replaceAll("\\D", "");
+        if (digits.length() == 13 || digits.length() == 10) {
+            return digits;
+        }
+
+        return null;
+    }
+
+    private LocalDate parseRawPublishDate(String value, String isbn) {
+        try {
+            return StringUtils.isBlank(value)
+                ? null
+                : LocalDate.parse(value, RAW_PUBDATE_FORMAT);
+        } catch (Exception e) {
+            log.warn("Failed to parse RAW pubdate='{}' for isbn={}", value, isbn);
+            return null;
+        }
+    }
+
+    private LocalDate parsePublishDateToDate(String value, String isbn) {
+        try {
+            return StringUtils.isBlank(value)
+                ? null
+                : LocalDate.parse(value, NAVER_PUBDATE_FORMAT);
+        } catch (Exception e) {
+            log.warn("Failed to parse NAVER pubdate='{}' for isbn={}", value, isbn);
+            return null;
+        }
+    }
+
+    private String getColumn(List<String> columns, int index) {
         if (index < 0 || index >= columns.size()) return null;
         String value = columns.get(index);
         return StringUtils.isBlank(value) ? null : value.trim();
     }
 
-    private String firstNonBlank(String... candidates) {
-        for (String candidate : candidates) {
-            if (StringUtils.isNotBlank(candidate)) return candidate.trim();
+    private String extractNormalizedIsbn(String raw) {
+        if (StringUtils.isBlank(raw)) {
+            return null;
+        }
+
+        String isbn10 = null;
+        String[] tokens = raw.split("\\s+");
+        for (String token : tokens) {
+            String normalized = normalizeIsbn(token);
+            if (normalized == null) {
+                continue;
+            }
+            if (normalized.length() == 13) {
+                return normalized;
+            }
+            if (normalized.length() == 10 && isbn10 == null) {
+                isbn10 = normalized;
+            }
+        }
+        return isbn10;
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String v : values) {
+            if (StringUtils.isNotBlank(v)) {
+                return v;
+            }
         }
         return null;
     }
 
-    private boolean isInvalidItem(String isbn, String title, String author, String description) {
-        return StringUtils.isBlank(isbn)
-            || StringUtils.isBlank(title)
-            || StringUtils.isBlank(author)
-            || StringUtils.isBlank(description);
-    }
-
-    private LocalDate parsePublishDateToDate(String pubdateStr, String isbn) {
-        if (StringUtils.isBlank(pubdateStr)) return null;
-        try {
-            return LocalDate.parse(pubdateStr, NAVER_PUBDATE_FORMAT);
-        } catch (Exception e) {
-            log.warn("Failed to parse pubdate='{}' for isbn={}", pubdateStr, isbn);
-            return null;
-        }
-    }
-
-    private String extractIsbn13(String rawIsbn) {
-        if (!rawIsbn.contains(" ")) return rawIsbn.trim();
-        String[] tokens = rawIsbn.split(" ");
-        for (String token : tokens) {
-            if (token.length() == 13) return token;
-        }
-        return tokens[0];
-    }
-
     private String cleanTitle(String title) {
         if (title == null) return null;
-        return title.replaceAll("<.*?>", "").trim();
+        return stripHtml(title).trim();
+    }
+
+    private String normalizeDescription(String raw) {
+        if (StringUtils.isBlank(raw)) {
+            return null;
+        }
+
+        String cleaned = stripHtml(raw)
+            .replaceAll("\\s+", " ")
+            .trim();
+
+        if (cleaned.length() < MIN_DESCRIPTION_LENGTH) {
+            return null;
+        }
+
+        return cleaned;
+    }
+
+    private String normalizeAuthor(String raw) {
+        if (StringUtils.isBlank(raw)) {
+            return null;
+        }
+
+        String cleaned = stripHtml(raw);
+        String[] tokens = AUTHOR_SEPARATOR_PATTERN.split(cleaned, 2);
+        String candidate = tokens.length > 0 ? tokens[0].trim() : cleaned.trim();
+
+        if (StringUtils.isBlank(candidate)) {
+            return null;
+        }
+
+        String withoutRoles = AUTHOR_ROLE_PATTERN.matcher(candidate).replaceAll("");
+        withoutRoles = AUTHOR_ROLE_KR_PATTERN.matcher(withoutRoles).replaceAll("");
+        withoutRoles = withoutRoles.replaceAll("\\s+", " ").trim();
+
+        return StringUtils.isBlank(withoutRoles) ? null : withoutRoles;
+    }
+
+    private String normalizeThumbnail(String raw) {
+        if (StringUtils.isBlank(raw)) {
+            return null;
+        }
+
+        String trimmed = raw.trim();
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            return trimmed;
+        }
+        return null;
+    }
+
+    private String stripHtml(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        return HTML_TAG_PATTERN.matcher(raw).replaceAll("");
     }
 }

@@ -1,19 +1,36 @@
 package org.todaybook.bookpreprocessingworker.config;
 
+import java.util.Map;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafka;
+import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
+import org.springframework.kafka.core.ConsumerFactory;
+import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.CommonErrorHandler;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
-import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.kafka.support.serializer.JsonDeserializer;
+import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.util.backoff.FixedBackOff;
+import org.todaybook.bookpreprocessingworker.application.dto.NaverBookItem;
+import org.todaybook.bookpreprocessingworker.domain.model.Book;
 
 @Configuration
 @EnableKafka
 @EnableConfigurationProperties(AppKafkaProperties.class)
 public class KafkaConfig {
+
+    private static final String NAVER_DTO_PACKAGE =
+        "org.todaybook.bookpreprocessingworker.application.dto";
 
     @Bean
     public TopicNames topicNames(AppKafkaProperties props) {
@@ -21,15 +38,90 @@ public class KafkaConfig {
     }
 
     @Bean
-    public CommonErrorHandler dlqErrorHandler(KafkaTemplate<String, Object> kafkaTemplate) {
-        // 실패 시 "원본토픽명.DLT"로 메시지를 전송함 (예: book.raw -> book.raw.DLT)
-        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate);
+    public ProducerFactory<String, Book> bookProducerFactory(KafkaProperties kafkaProperties) {
+        Map<String, Object> props = kafkaProperties.buildProducerProperties(null);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        props.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false);
+        return new DefaultKafkaProducerFactory<>(props);
+    }
 
-        // 1000ms(1초) 간격으로 2번 재시도 (최초 1회 + 재시도 2회 = 총 3회 시도 후 실패 시 DLQ행)
+    @Bean
+    public KafkaTemplate<String, Book> bookKafkaTemplate(ProducerFactory<String, Book> bookProducerFactory) {
+        return new KafkaTemplate<>(bookProducerFactory);
+    }
+
+    @Bean
+    public ProducerFactory<Object, Object> dlqProducerFactory(KafkaProperties kafkaProperties) {
+        Map<String, Object> props = kafkaProperties.buildProducerProperties(null);
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        props.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false);
+        return new DefaultKafkaProducerFactory<>(props);
+    }
+
+    @Bean
+    public KafkaTemplate<Object, Object> dlqKafkaTemplate(ProducerFactory<Object, Object> dlqProducerFactory) {
+        return new KafkaTemplate<>(dlqProducerFactory);
+    }
+
+    @Bean
+    public ConsumerFactory<String, String> csvConsumerFactory(KafkaProperties kafkaProperties) {
+        Map<String, Object> props = kafkaProperties.buildConsumerProperties(null);
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        return new DefaultKafkaConsumerFactory<>(
+            props,
+            new StringDeserializer(),
+            new StringDeserializer()
+        );
+    }
+
+    @Bean
+    public ConsumerFactory<String, NaverBookItem> jsonConsumerFactory(KafkaProperties kafkaProperties) {
+        Map<String, Object> props = kafkaProperties.buildConsumerProperties(null);
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.remove(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
+
+        JsonDeserializer<NaverBookItem> deserializer = new JsonDeserializer<>(NaverBookItem.class, false);
+        deserializer.addTrustedPackages(NAVER_DTO_PACKAGE);
+
+        return new DefaultKafkaConsumerFactory<>(
+            props,
+            new StringDeserializer(),
+            deserializer
+        );
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, String> csvKafkaListenerContainerFactory(
+        ConsumerFactory<String, String> csvConsumerFactory,
+        CommonErrorHandler dlqErrorHandler
+    ) {
+        ConcurrentKafkaListenerContainerFactory<String, String> factory =
+            new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(csvConsumerFactory);
+        factory.setCommonErrorHandler(dlqErrorHandler);
+        return factory;
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, NaverBookItem> jsonKafkaListenerContainerFactory(
+        ConsumerFactory<String, NaverBookItem> jsonConsumerFactory,
+        CommonErrorHandler dlqErrorHandler
+    ) {
+        ConcurrentKafkaListenerContainerFactory<String, NaverBookItem> factory =
+            new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(jsonConsumerFactory);
+        factory.setCommonErrorHandler(dlqErrorHandler);
+        return factory;
+    }
+
+    @Bean
+    public CommonErrorHandler dlqErrorHandler(KafkaTemplate<Object, Object> dlqKafkaTemplate) {
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(dlqKafkaTemplate);
         FixedBackOff backOff = new FixedBackOff(1000L, 2);
-
-        // 공통 모듈의 로깅 에러 핸들러로 대체하여 관측성을 확보
-        return new org.todaybook.bookpreprocessingworker.common.kafka.LoggingErrorHandler(recoverer, backOff);
+        return new org.todaybook.common.kafka.LoggingErrorHandler(recoverer, backOff);
     }
 
 }

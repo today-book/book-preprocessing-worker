@@ -21,8 +21,10 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.springframework.test.context.ActiveProfiles;
@@ -36,18 +38,16 @@ import org.springframework.test.context.TestPropertySource;
     "spring.kafka.consumer.auto-offset-reset=earliest",
     "spring.kafka.consumer.group-id=docker-book-preprocessor",
     "spring.kafka.properties.security.protocol=PLAINTEXT",
-    "app.kafka.input-topic=book.raw",
+    "app.kafka.input-topic=book.raw.naver",
     "app.kafka.output-topic=book.parsed",
     "KAFKA_BOOTSTRAP_SERVERS=localhost:9092"
 })
 class DockerKafkaIntegrationTest {
 
-    private static final String INPUT_TOPIC = "book.raw";
+    private static final String INPUT_TOPIC = "book.raw.naver";
     private static final String OUTPUT_TOPIC = "book.parsed";
 
-    @Autowired
-    private KafkaTemplate<String, Object> kafkaTemplate;
-
+    private KafkaTemplate<String, String> kafkaTemplate;
     private KafkaConsumer<String, String> dockerConsumer;
 
     /* -------------------------------------------------
@@ -62,6 +62,7 @@ class DockerKafkaIntegrationTest {
         );
 
         ensureTopicsExist();
+        kafkaTemplate = new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(producerProps()));
         dockerConsumer = createConsumer();
         waitForAssignmentAndSeekToBeginning(dockerConsumer);
     }
@@ -92,7 +93,7 @@ class DockerKafkaIntegrationTest {
               "publisher": "Integration Pub",
               "pubdate": "20240201",
               "isbn": "%s",
-              "description": "Message used for docker-based Kafka connectivity test"
+              "description": "Message used for docker-based Kafka connectivity test and validation."
             }
             """.formatted(isbn);
 
@@ -133,6 +134,14 @@ class DockerKafkaIntegrationTest {
         KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
         consumer.subscribe(Collections.singletonList(OUTPUT_TOPIC));
         return consumer;
+    }
+
+    private Map<String, Object> producerProps() {
+        Map<String, Object> props = new HashMap<>();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        return props;
     }
 
     private void waitForAssignmentAndSeekToBeginning(KafkaConsumer<String, String> consumer) {
