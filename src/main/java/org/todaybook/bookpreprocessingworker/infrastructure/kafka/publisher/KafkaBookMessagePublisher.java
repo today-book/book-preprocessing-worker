@@ -32,7 +32,7 @@ public class KafkaBookMessagePublisher implements BookMessagePublisher {
         }
 
         String key = book.cleanIsbnKey();
-        kafkaTemplate.send(outputTopic, key, book);
+        kafkaTemplate.send(outputTopic, book);
         log.info("Published book. isbn={}, topic={}", book.isbn(), outputTopic);
     }
 }

@@ -1,5 +1,7 @@
 package org.todaybook.bookpreprocessingworker.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -38,12 +40,16 @@ public class KafkaConfig {
     }
 
     @Bean
-    public ProducerFactory<String, Book> bookProducerFactory(KafkaProperties kafkaProperties) {
+    public ProducerFactory<String, Book> bookProducerFactory(
+        KafkaProperties kafkaProperties,
+        ObjectMapper objectMapper
+    ) {
         Map<String, Object> props = kafkaProperties.buildProducerProperties(null);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
-        props.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false);
-        return new DefaultKafkaProducerFactory<>(props);
+        props.remove(JsonSerializer.ADD_TYPE_INFO_HEADERS);
+        JsonSerializer<Book> valueSerializer = new JsonSerializer<>(configuredObjectMapper(objectMapper));
+        valueSerializer.setAddTypeInfo(false);
+        return new DefaultKafkaProducerFactory<>(props, new StringSerializer(), valueSerializer);
     }
 
     @Bean
@@ -52,16 +58,20 @@ public class KafkaConfig {
     }
 
     @Bean
-    public ProducerFactory<Object, Object> dlqProducerFactory(KafkaProperties kafkaProperties) {
+    public ProducerFactory<String, Object> dlqProducerFactory(
+        KafkaProperties kafkaProperties,
+        ObjectMapper objectMapper
+    ) {
         Map<String, Object> props = kafkaProperties.buildProducerProperties(null);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
-        props.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false);
-        return new DefaultKafkaProducerFactory<>(props);
+        props.remove(JsonSerializer.ADD_TYPE_INFO_HEADERS);
+        JsonSerializer<Object> valueSerializer = new JsonSerializer<>(configuredObjectMapper(objectMapper));
+        valueSerializer.setAddTypeInfo(false);
+        return new DefaultKafkaProducerFactory<>(props, new StringSerializer(), valueSerializer);
     }
 
     @Bean
-    public KafkaTemplate<Object, Object> dlqKafkaTemplate(ProducerFactory<Object, Object> dlqProducerFactory) {
+    public KafkaTemplate<String, Object> dlqKafkaTemplate(ProducerFactory<String, Object> dlqProducerFactory) {
         return new KafkaTemplate<>(dlqProducerFactory);
     }
 
@@ -78,12 +88,16 @@ public class KafkaConfig {
     }
 
     @Bean
-    public ConsumerFactory<String, NaverBookItem> jsonConsumerFactory(KafkaProperties kafkaProperties) {
+    public ConsumerFactory<String, NaverBookItem> jsonConsumerFactory(
+        KafkaProperties kafkaProperties,
+        ObjectMapper kafkaConsumerObjectMapper
+    ) {
         Map<String, Object> props = kafkaProperties.buildConsumerProperties(null);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.remove(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
 
-        JsonDeserializer<NaverBookItem> deserializer = new JsonDeserializer<>(NaverBookItem.class, false);
+        JsonDeserializer<NaverBookItem> deserializer =
+            new JsonDeserializer<>(NaverBookItem.class, kafkaConsumerObjectMapper, false);
         deserializer.addTrustedPackages(NAVER_DTO_PACKAGE);
 
         return new DefaultKafkaConsumerFactory<>(
@@ -118,10 +132,17 @@ public class KafkaConfig {
     }
 
     @Bean
-    public CommonErrorHandler dlqErrorHandler(KafkaTemplate<Object, Object> dlqKafkaTemplate) {
+    public CommonErrorHandler dlqErrorHandler(KafkaTemplate<String, Object> dlqKafkaTemplate) {
         DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(dlqKafkaTemplate);
         FixedBackOff backOff = new FixedBackOff(1000L, 2);
         return new org.todaybook.common.kafka.LoggingErrorHandler(recoverer, backOff);
+    }
+
+    private ObjectMapper configuredObjectMapper(ObjectMapper baseMapper) {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+        mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        return mapper;
     }
 
 }

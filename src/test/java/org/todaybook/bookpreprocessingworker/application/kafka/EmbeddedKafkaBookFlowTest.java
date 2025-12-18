@@ -88,7 +88,7 @@ class EmbeddedKafkaBookFlowTest {
               "title": "<b>Sample Book</b>",
               "link": "http://example.com/book",
               "image": "http://example.com/book.jpg",
-              "author": "Test Author",
+              "author": "Test Writer",
               "price": "15000",
               "discount": "12000",
               "publisher": "Test Pub",
@@ -107,7 +107,7 @@ class EmbeddedKafkaBookFlowTest {
 
             assertThat(processed.isbn()).isEqualTo("9781234567890");
             assertThat(processed.title()).isEqualTo("Sample Book");
-            assertThat(processed.author()).isEqualTo("Test Author");
+            assertThat(processed.author()).isEqualTo("Test Writer");
             assertThat(processed.description()).contains("embedded test");
         });
     }

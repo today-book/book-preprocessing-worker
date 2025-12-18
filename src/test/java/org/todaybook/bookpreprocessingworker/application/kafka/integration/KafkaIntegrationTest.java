@@ -115,7 +115,7 @@ class KafkaIntegrationTest {
                     "publisher": "인사이트",
                     "pubdate": "20181101",
                     "isbn": "9788966262281",
-                    "description": "자바 개발자를 위한 필독서로 널리 알려진 책입니다."
+                    "description": "자바 개발자를 위한 필독서로 널리 알려진 책입니다. 충분히 긴 설명을 덧붙입니다."
                 }
                 """;
 
@@ -148,7 +148,7 @@ class KafkaIntegrationTest {
                     "author": "에릭 프리먼",
                     "publisher": "한빛미디어",
                     "pubdate": "20050901",
-                    "description": "디자인 패턴 입문서로 충분한 설명을 포함합니다."
+                    "description": "디자인 패턴 입문서로 충분한 설명을 포함합니다. 테스트를 위해 문장을 더 추가합니다."
                 }
                 """;
 
@@ -175,10 +175,10 @@ class KafkaIntegrationTest {
                 {
                     "title": "테스트 책",
                     "isbn": "8966262287 9788966262281",
-                    "author": "저자",
+                    "author": "홍길동",
                     "publisher": "출판사",
                     "pubdate": "20231225",
-                    "description": "테스트용 설명으로 최소 길이 요건을 충족합니다."
+                    "description": "테스트용 설명으로 최소 길이 요건을 충족합니다. 추가 문장을 붙여 길이를 확보합니다."
                 }
                 """;
 
@@ -209,13 +209,13 @@ class KafkaIntegrationTest {
             // given
             String[] messages = {
                 """
-                {"title":"책1","isbn":"9781111111111","author":"저자1","publisher":"출판사1","pubdate":"20230101","description":"설명1이 충분히 길어서 요건을 충족합니다."}
+                {"title":"책1","isbn":"9781111111111","author":"저자1","publisher":"출판사1","pubdate":"20230101","description":"설명1이 충분히 길어서 요건을 충족합니다. 추가 문장으로 길이를 더합니다."}
                 """,
                 """
-                {"title":"책2","isbn":"9782222222222","author":"저자2","publisher":"출판사2","pubdate":"20230202","description":"설명2가 충분히 길어서 요건을 충족합니다."}
+                {"title":"책2","isbn":"9782222222222","author":"저자2","publisher":"출판사2","pubdate":"20230202","description":"설명2가 충분히 길어서 요건을 충족합니다. 추가 문장으로 길이를 더합니다."}
                 """,
                 """
-                {"title":"책3","isbn":"9783333333333","author":"저자3","publisher":"출판사3","pubdate":"20230303","description":"설명3도 충분히 길어서 요건을 충족합니다."}
+                {"title":"책3","isbn":"9783333333333","author":"저자3","publisher":"출판사3","pubdate":"20230303","description":"설명3도 충분히 길어서 요건을 충족합니다. 추가 문장으로 길이를 더합니다."}
                 """
             };
 
@@ -269,10 +269,10 @@ class KafkaIntegrationTest {
                 {
                     "title": "날짜 테스트 책",
                     "isbn": "9781234567890",
-                    "author": "저자",
+                    "author": "홍길동",
                     "publisher": "출판사",
                     "pubdate": "20231225",
-                    "description": "날짜 파싱 테스트를 위한 충분히 긴 설명입니다."
+                    "description": "날짜 파싱 테스트를 위한 충분히 긴 설명입니다. 길이 확보를 위해 문장을 추가합니다."
                 }
                 """;
 
@@ -301,10 +301,10 @@ class KafkaIntegrationTest {
                 {
                     "title": "잘못된 날짜 책",
                     "isbn": "9781234567890",
-                    "author": "저자",
+                    "author": "홍길동",
                     "publisher": "출판사",
                     "pubdate": "INVALID_DATE",
-                    "description": "잘못된 날짜라도 설명은 충분히 깁니다."
+                    "description": "잘못된 날짜라도 설명은 충분히 깁니다. 길이 확보를 위해 문장을 더 추가합니다."
                 }
                 """;
 
