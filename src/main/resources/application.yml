@@ -5,10 +5,13 @@ server:
 spring:
   application:
     name: book-preprocessing-worker
+
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
 
   kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+
     consumer:
       group-id: book-preprocessor
       auto-offset-reset: earliest
@@ -25,10 +28,10 @@ spring:
 management:
   endpoints:
     web:
+      base-path: /internal
       exposure:
         include: health,info,prometheus
         exclude: env,heapdump,beans,loggers
-      base-path: /internal
   endpoint:
     health:
       show-details: never
@@ -43,7 +46,5 @@ app:
     input-topic: book.raw
     csv-input-topic: csv-book.raw
     output-topic: book.parsed
-    prefix:
-    env:
     json-group-id: book-preprocessor-naver
     csv-group-id: book-preprocessor-csv
