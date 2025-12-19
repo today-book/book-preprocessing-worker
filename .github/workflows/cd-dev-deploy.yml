@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  APP_NAME: build-service
+  APP_NAME: book-preprocessing-worker
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
   APP_PORT: 9002
