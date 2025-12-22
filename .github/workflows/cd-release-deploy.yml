@@ -131,7 +131,10 @@ jobs:
           export APP_PORT="$APP_PORT"
           export VERSION="$VERSION"
 
+          sudo mkdir -p "/srv/todaybook/${APP_NAME}"
+          sudo chown ssm-user:ssm-user "/srv/todaybook/${APP_NAME}"
           cd "/srv/todaybook/${APP_NAME}"
+
           echo "$GHCR_PAT" | sudo docker login ghcr.io -u "$GHCR_USER" --password-stdin
           chmod +x deploy.sh
           ./deploy.sh
